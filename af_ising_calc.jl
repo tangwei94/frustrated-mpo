@@ -1,6 +1,3 @@
-# use power method to find the fix point of the transfer matrix
-# for the frustrated MPO, have to use the "constant shift" trick
-
 using LinearAlgebra, TensorKit, MPSKit, MPSKitModels, KrylovKit
 using JLD2
 using Plots
