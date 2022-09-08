@@ -118,23 +118,38 @@ function perfect_sampling(ψ::FiniteMPS)
 end
 
 """
-    num_domain_wall(σs::Vector{Int64})
+    num_domain_wall(σs::Vector{Int64}, mpo_choice::Symbol, boundary_condition::Symbol)
 
     number of domain walls for a certain configuration
 """
-function num_domain_wall(σs::Vector{Int64})
-    N = length(σs)
-    return sum(abs.(σs[[2:N; 1]] .- σs))
+function num_domain_wall(σs::Vector{Int64}, mpo_choice::Symbol, boundary_condition::Symbol)
+    L = length(σs)
+    if mpo_choice in [:frstr, :frstrT]
+        if boundary_condition == :pbc
+            return sum(abs.(σs[[2:L; 1]] .- σs))
+        elseif boundary_condition == :obc 
+            return sum(abs.(σs[2:L] .- σs[1:L-1]))
+        end
+    elseif mpo_choice == :nonfrustr 
+        if boundary_condition == :pbc
+            return sum(σs .== 2) + sum(σs .== 3)
+        elseif boundary_condition == :obc
+            @warn "not checked" 
+            return sum(σs .== 2) + sum(σs .== 3)
+        end
+    end
 end
 
 """
-    num_nfr_domain_wall(σs::Vector{Int64})
-
-    number of domain walls for a certain configuration
+    sample_n_domain_wall(ψ::finitemps, mpo_choice::symbol, boundary_condition::symbol; ntotal=1000)
 """
-function num_nfr_domain_wall(σs::Vector{Int64})
-    N = length(σs)
-    return sum(σs .== 2) + sum(σs .== 3)
+function sample_n_domain_wall(ψ::FiniteMPS, mpo_choice::Symbol, boundary_condition::Symbol; Ntotal=1000)
+    nums = Int64[]
+    for ix in 1:Ntotal
+        σs = perfect_sampling(ψ)
+        push!(nums, num_domain_wall(σs, mpo_choice, boundary_condition))
+    end
+    return nums
 end
 
 function accumulate_domain_wall_loc!(domain_wall_locs::Array{Int64, 1}, σs)
@@ -191,3 +206,29 @@ function power_projection(𝕋::DenseMPO, χs::Vector{<:Int}; Npower=100, spect_
     @save filename*"L$(L).jld" {compress=true} fs vars diffs ψms 
     return fs, vars, diffs, ψms  
 end
+
+"""
+    filename_gen(mpo_choice::Symbol, boundary_condition::Symbol)
+
+    Generate the filename for the datafile.
+"""
+function filename_gen(mpo_choice::Symbol, boundary_condition::Symbol)
+    if mpo_choice == :frstr
+        d_ph = 2;
+        filename = "frustrated_";
+    elseif mpo_choice == :nonfrstr 
+        d_ph = 4;
+        filename = "nonfrustrated_";
+    elseif mpo_choice == :frstrT 
+        d_ph = 2;
+        filename = "frustrated_T_";
+    end
+    if boundary_condition == :obc 
+        filename = filename * "obc_"
+    else
+        filename = filename * "pbc_"
+    end
+
+    return filename
+end
+
