@@ -1,12 +1,11 @@
+const exact_free_energy = 0.3230659669 
+
 """
-    tesnor_triangular_AF_ising()
+    tensor_triangular_AF_ising()
     
     tensor for frustrated MPO.
 """
 function tensor_triangular_AF_ising()
-    # frustrated
-    # exact: 0.3230659669
-    # ref: Phys. Rev. Res. 3, 013041 (2021)
     t = TensorMap(zeros, ComplexF64, ℂ^2*ℂ^2, ℂ^2)
     p = TensorMap(zeros, ComplexF64, ℂ^2, ℂ^2*ℂ^2)
     t[1, 1, 2] = 1
@@ -27,9 +26,6 @@ end
     frustrated MPO. The other direction.
 """
 function tensor_triangular_AF_ising_T()
-    # frustrated
-    # exact: 0.3230659669
-    # ref: Phys. Rev. Res. 3, 013041 (2021)
     T0 = tensor_triangular_AF_ising() 
     Tdata = reshape(T0.data, (2, 2, 2, 2))
     Tdata = permutedims(Tdata, (1, 3, 2, 4))
@@ -42,9 +38,6 @@ end
     non-frustrated MPO.
 """
 function tensor_triangular_AF_ising_alternative()
-    # non-frustrated 
-    # exact: 0.3230659669
-    # ref: Phys. Rev. Res. 3, 013041 (2021)
     t = TensorMap(zeros, ComplexF64, ℂ^4*ℂ^4, ℂ^4)
     t[1, 2, 3] = 1
     t[3, 1, 2] = 1
@@ -57,10 +50,22 @@ function tensor_triangular_AF_ising_alternative()
 end
 
 """
+    tensor_triangular_AF_ising_alternative_T()
+
+    non-frustrated MPO. the other direction.
+"""
+function tensor_triangular_AF_ising_alternative_T()
+    T0 = tensor_triangular_AF_ising_alternative() 
+    Tdata = reshape(T0.data, (4, 4, 4, 4))
+    Tdata = permutedims(Tdata, (1, 3, 2, 4))
+    return TensorMap(Tdata, ℂ^4*ℂ^4, ℂ^4*ℂ^4)
+end
+
+"""
     mpo_gen(L::Int, mpo_choice::Symbol, boundary_condition::Symbol)
 
     Generate the MPO for transfer matrix 𝕋. `L` is the length of the system.
-    mpo_choice can be chosen among `:frstr`, `:nonfrstr`, `:frstrT`
+    mpo_choice can be chosen among `:frstr`, `:nonfrstr`, `:frstrT`, `:nonfrstrT`
     boundary_condition `:pbc` or `:obc`
 """
 function mpo_gen(L::Int, mpo_choice::Symbol, boundary_condition::Symbol)
@@ -73,6 +78,9 @@ function mpo_gen(L::Int, mpo_choice::Symbol, boundary_condition::Symbol)
     elseif mpo_choice == :frstrT 
         T = tensor_triangular_AF_ising_T();
         Dvir = 2;
+    elseif mpo_choice == :nonfrstrT 
+        T = tensor_triangular_AF_ising_alternative_T(); 
+        Dvir = 4;
     end
 
     if boundary_condition == :pbc 
@@ -161,12 +169,45 @@ function entanglement_entropy(ψ::FiniteMPS, loc::Int)
     return sum(-spect.^2 .* log.(spect.^2))
 end
 
+struct operation_scheme 
+    spect_shift::Number
+    spect_rotation::Number
+    project_outL::Vector{<:FiniteMPS}
+    project_outR::Vector{<:FiniteMPS}
+
+    function operation_scheme(spect_shift::Number,
+                           spect_rotation::Number, 
+                           project_outL::Vector{<:FiniteMPS},
+                           project_outR::Vector{<:FiniteMPS})
+
+        project_outL_binormalized = FiniteMPS[]
+        for (ϕL, ϕR) in zip(project_outL, project_outR)
+            push!(project_outL_binormalized, ϕL * (1/dot(ϕR, ϕL)))
+        end
+
+        new(spect_shift, spect_rotation, project_outL_binormalized, project_outR)
+    end
+end
+
+function (a::operation_scheme)(Tψ::FiniteMPS, ψ::FiniteMPS)
+    ψ1 = exp(im*a.spect_rotation)*Tψ + a.spect_shift*ψ
+    for (ϕL, ϕR) in zip(a.project_outL, a.project_outR)
+        ψ1 = ψ1 - dot(ϕL, ψ1) * ϕR
+    end
+    return ψ1
+end
+
+const gs_operation = operation_scheme(0.2, 0, FiniteMPS[], FiniteMPS[])
+const no_operation = operation_scheme(0, 0, FiniteMPS[], FiniteMPS[])
+const gs1_operation = operation_scheme(0.4, 2*pi/3, FiniteMPS[], FiniteMPS[])
+const gs2_operation = operation_scheme(0.4, -2*pi/3, FiniteMPS[], FiniteMPS[])
+
 """
     power_projection(𝕋::DenseMPO, χs::Vector{<:Int}; Npower=100, spect_shifting=0.2, spect_rotation=0, filename="temp.jld")   
 
     obtain fixed point MPS using power method
 """
-function power_projection(𝕋::DenseMPO, χs::Vector{<:Int}; Npower=100, spect_shifting=0.2, spect_rotation=0, filename="temp")
+function power_projection(𝕋::DenseMPO, χs::Vector{<:Int}; Npower=100, operation=gs_operation, filename="temp")
     ph_space = space(𝕋.opp[2], 2)
     L = length(𝕋)
 
@@ -181,7 +222,7 @@ function power_projection(𝕋::DenseMPO, χs::Vector{<:Int}; Npower=100, spect_
         ψ = copy(ψm)
         Tψ = normalize(𝕋*ψ); 
         for ix in 1:Npower
-            ψ1 = changebonds(exp(im*spect_rotation)*Tψ + spect_shifting*ψ, SvdCut(trscheme=truncdim(χ)));
+            ψ1 = changebonds(operation(Tψ, ψ), SvdCut(trscheme=truncdim(χ)));
             normalize!(ψ1)
             diff = 2*log(norm(dot(ψ, ψ1)))
             ψ = copy(ψ1)
@@ -212,7 +253,7 @@ end
 
     Generate the filename for the datafile.
 """
-function filename_gen(mpo_choice::Symbol, boundary_condition::Symbol)
+function filename_gen(mpo_choice::Symbol, boundary_condition::Symbol; more_info="")
     if mpo_choice == :frstr
         d_ph = 2;
         filename = "frustrated_";
@@ -222,6 +263,9 @@ function filename_gen(mpo_choice::Symbol, boundary_condition::Symbol)
     elseif mpo_choice == :frstrT 
         d_ph = 2;
         filename = "frustrated_T_";
+    elseif mpo_choice == :nonfrstrT 
+        d_ph = 4;
+        filename = "nonfrustrated_T_";
     end
     if boundary_condition == :obc 
         filename = filename * "obc_"
@@ -229,6 +273,6 @@ function filename_gen(mpo_choice::Symbol, boundary_condition::Symbol)
         filename = filename * "pbc_"
     end
 
-    return filename
+    return filename * more_info
 end
 

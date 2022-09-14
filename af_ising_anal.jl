@@ -4,12 +4,12 @@ using Plots
 
 include("utils.jl");
 
-mpo_choice = :frstr # :nonfrstr, :frstrT
+mpo_choice = :nonfrstr # :nonfrstr, :frstrT
 boundary_condition = :obc # :pbc, :obc
 
 filename = filename_gen(mpo_choice, boundary_condition)
 
-Ls = [6, 12, 18, 24, 30, 36, 48, 60]; 
+Ls = [12, 18, 24, 30, 36, 48, 60, 72, 84]; # totally breaks at L=96 
 χs = [4, 8, 12, 16, 20, 24, 28, 32];
 
 vars_L = []
@@ -42,11 +42,12 @@ end
 scatter!(Ls, EEs)
 xlabel!("L")
 ylabel!("half chain EE")
-M = fill(1.0, (length(Ls) ÷ 2, 2))
-M[:, 2] = log.(Ls[(length(Ls)÷2+1):end])
-fits = (M' * M) \ (M' * EEs[(length(Ls)÷2+1):end]) # linear fitting
+M = fill(1.0, (length(Ls)-length(Ls)÷2+1, 2))
+M[:, 2] = log.(Ls[(length(Ls)÷2):end])
+fits = (M' * M) \ (M' * EEs[(length(Ls)÷2):end]) # linear fitting
 @show fits
 plot!(Ls, fits[1] .+ fits[2] .* log.(Ls))
+xaxis!(:log)
 savefig(filename*"halfchainEE-vs-L.pdf")
 
 plot()
@@ -118,6 +119,7 @@ elseif mpo_choice == :nonfrstr
 end
 corrs = Float64[]
 correlator = [add_util_leg(σz), add_util_leg(σz)]
+
 #push!(corrs, abs(expectation_value(ψms[end], correlator, Ls[end] ÷ 2)))
 for ix in 1:Ls[end]÷3
     insert!(correlator, 2, add_util_leg(σ0))
