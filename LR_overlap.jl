@@ -4,15 +4,14 @@ using Plots
 
 include("utils.jl");
 
-mpo_choiceR = :nonfrstr # :nonfrstr, :frstrT
-mpo_choiceL = :nonfrstrT # :nonfrstr, :frstrT
+mpo_choiceR = :frstr # :nonfrstr, :frstrT
+mpo_choiceL = :frstrT # :nonfrstr, :frstrT
 boundary_condition = :obc # :pbc, :obc
 
 filenameR = filename_gen(mpo_choiceR, boundary_condition)
 filenameL = filename_gen(mpo_choiceL, boundary_condition)
 
-#Ls = [6, 12, 18, 24, 30, 36, 48, 60, 72, 84]; 
-Ls = [6, 12, 18, 24]; 
+Ls = [6, 12, 18, 24, 30, 36, 48, 60, 72, 84]; 
 χs = [4, 8, 12, 16, 20, 24, 28, 32];
 
 ψmsR_L = []
