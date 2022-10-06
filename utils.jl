@@ -1,4 +1,41 @@
+# exact free energy at T=0 for triangular ising
 const exact_free_energy = 0.3230659669 
+
+# copied from MPSKit.jl/src/states/abstractmps.jl
+const MPOTensor{S} = AbstractTensorMap{S,2,2} where {S<:EuclideanSpace}
+
+# copied from MPSKit.jl/src/utility.jl
+_firstspace(t::AbstractTensorMap) = space(t, 1)
+_lastspace(t::AbstractTensorMap) = space(t, numind(t))
+
+"""
+    tensor_trivial()
+
+    construct a nonhermitian MPO in the form P 𝕋 P^{-1}, where 𝕋 is a hermitian MPO.
+"""
+function tensor_trivial(β::Real, ϵ::Number)
+    δ = TensorMap(zeros, ComplexF64, ℂ^2*ℂ^2, ℂ^2*ℂ^2)
+    δ[1, 1, 1, 1] = δ[2, 2, 2, 2] = 1
+
+    t = TensorMap(zeros, ComplexF64, ℂ^2, ℂ^2)
+    t[1, 1] = t[2, 2] = exp(β)
+    t[2, 1] = t[1, 2] = exp(-β)
+    U, S, V = tsvd(t)
+    Us, sV = U * sqrt(S), sqrt(S) * V
+
+    @tensor T[-1, -2; -3, -4] := sV[-1, 1] * sV[-2, 2] * Us[3, -3] * Us[4, -4] * δ[1, 2, 3, 4]
+
+    Pdat = [1 2 ; 4 2] * ϵ + Matrix{ComplexF64}(I, 2, 2)
+    Pinvdat = inv(Pdat)
+
+    P = TensorMap(Pdat, ℂ^1*ℂ^2, ℂ^2*ℂ^1)
+    Pinv = TensorMap(Pinvdat, ℂ^1*ℂ^2, ℂ^2*ℂ^1)
+
+    Pdag = TensorMap(Matrix(Pdat'), ℂ^1*ℂ^2, ℂ^2*ℂ^1)
+    Pdaginv = TensorMap(Matrix(Pinvdat'), ℂ^1*ℂ^2, ℂ^2*ℂ^1)
+
+    return T, P, Pinv, Pdag, Pdaginv
+end
 
 """
     tensor_triangular_AF_ising()
@@ -62,7 +99,7 @@ function tensor_triangular_AF_ising_alternative_T()
 end
 
 """
-    tensor_triangular_AF_ising_alternative_T()
+    tensor_triangular_AF_ising_adapted()
 
     non-frustrated MPO. gauge the physical dim to be 2.
 """
@@ -94,23 +131,37 @@ end
     Generate the MPO for transfer matrix 𝕋. `L` is the length of the system.
     mpo_choice can be chosen among `:frstr`, `:nonfrstr`, `:frstrT`, `:nonfrstrT`
     boundary_condition `:pbc` or `:obc`
+    use L=1 or boundary_condition `:inf` for infinite system
 """
 function mpo_gen(L::Int, mpo_choice::Symbol, boundary_condition::Symbol)
     if mpo_choice == :frstr
         T = tensor_triangular_AF_ising();
-        Dvir = 2;
     elseif mpo_choice == :nonfrstr 
         T = tensor_triangular_AF_ising_alternative(); 
-        Dvir = 4;
     elseif mpo_choice == :frstrT 
         T = tensor_triangular_AF_ising_T();
-        Dvir = 2;
     elseif mpo_choice == :nonfrstrT 
         T = tensor_triangular_AF_ising_alternative_T(); 
-        Dvir = 4;
     elseif mpo_choice == :nonfrstr_adapted
         T = tensor_triangular_AF_ising_adapted()
-        Dvir = 10;
+    end
+    return mpo_gen(L, T, boundary_condition)
+end
+
+"""
+    mpo_gen(L::Int, T::MPOTensor, boundary_condition::Symbol)
+
+    Generate the MPO for transfer matrix 𝕋. 
+    `L` is the length of the system.
+    boundary_condition `:pbc` or `:obc`
+    use L=1 or boundary_condition `:inf` for infinite system
+"""
+function mpo_gen(L::Int, T::MPOTensor, boundary_condition::Symbol)
+
+    Dvir = dim(_firstspace(T))
+
+    if L == 1 || boundary_condition == :inf # infinite
+        return DenseMPO([T])
     end
 
     if boundary_condition == :pbc 
@@ -122,6 +173,25 @@ function mpo_gen(L::Int, mpo_choice::Symbol, boundary_condition::Symbol)
         𝕋[end] = (@tensor Tend[-1, -2; -3, -4] := T[-1, -2, -3, 1] * bT[1, -4]) 
         return DenseMPO(𝕋)
     end
+end
+
+"""
+    convert_to_mat(𝕋::DenseMPO)
+
+    convert a (pressumed to be finite) MPO into a big matrix. 
+    Be careful about the MPO's length!
+"""
+function convert_to_mat(𝕋::DenseMPO)
+
+    L = length(𝕋)
+
+    ncon_contraction_order = [[ix, -2*ix+1, -2*ix, ix+1] for ix in 1:L] 
+    ncon_contraction_order[end][end] = 1
+    permutation_orders = Tuple(2 .* (1:L) .- 1), Tuple(2 .* (1:L))
+
+    𝕋mat = permute(ncon(𝕋.opp, ncon_contraction_order), permutation_orders...)   
+
+    return 𝕋mat
 end
 
 """
@@ -199,6 +269,13 @@ function entanglement_entropy(ψ::FiniteMPS, loc::Int)
     return sum(-spect.^2 .* log.(spect.^2))
 end
 
+function nonherm_variance!(Tψ::MPSKit.AbstractMPS, ψ::MPSKit.AbstractMPS)
+    normalize!(ψ)
+    normalize!(Tψ)
+    L = length(ψ)
+    return -2*log(norm(dot(ψ, Tψ))) / L |> real
+end
+
 struct operation_scheme 
     spect_shift::Number
     spect_rotation::Number
@@ -216,6 +293,7 @@ struct operation_scheme
         end
 
         new(spect_shift, spect_rotation, project_outL_binormalized, project_outR)
+        #new(spect_shift, spect_rotation, project_outL, project_outR)
     end
 end
 
@@ -223,6 +301,7 @@ function (a::operation_scheme)(Tψ::FiniteMPS, ψ::FiniteMPS)
     ψ1 = exp(im*a.spect_rotation)*Tψ + a.spect_shift*ψ
     for (ϕL, ϕR) in zip(a.project_outL, a.project_outR)
         ψ1 = ψ1 - dot(ϕL, ψ1) * ϕR
+        #ψ1 = ψ1 - dot(ϕL, ψ1) * ϕL
     end
     return ψ1
 end
@@ -233,7 +312,7 @@ const gs1_operation = operation_scheme(0.4, 2*pi/3, FiniteMPS[], FiniteMPS[])
 const gs2_operation = operation_scheme(0.4, -2*pi/3, FiniteMPS[], FiniteMPS[])
 
 """
-    power_projection(𝕋::DenseMPO, χs::Vector{<:Int}; Npower=100, spect_shifting=0.2, spect_rotation=0, filename="temp.jld")   
+    function power_projection(𝕋::DenseMPO, χs::Vector{<:Int}; Npower=100, operation=gs_operation, filename="temp")
 
     obtain fixed point MPS using power method
 """
@@ -246,33 +325,66 @@ function power_projection(𝕋::DenseMPO, χs::Vector{<:Int}; Npower=100, operat
     diffs = Float64[] # fidelity with respect to previous step
     ψms = [] # optimized MPS for each χ
 
-    ψm = FiniteMPS(L, ph_space, ℂ^χs[1]);
-    for χ in χs
-        varm = 1
-        ψ = copy(ψm)
-        Tψ = normalize(𝕋*ψ); 
-        for ix in 1:Npower
-            ψ1 = changebonds(operation(Tψ, ψ), SvdCut(trscheme=truncdim(χ)));
-            normalize!(ψ1)
-            diff = 2*log(norm(dot(ψ, ψ1)))
-            ψ = copy(ψ1)
+    if L > 1
+        ψm = FiniteMPS(L, ph_space, ℂ^χs[1]);
+        for χ in χs
+            varm = 1
+            ψ = copy(ψm)
+            Tψ = normalize(𝕋*ψ); 
+            for ix in 1:Npower
+                ψ1 = changebonds(operation(Tψ, ψ), SvdCut(trscheme=truncdim(χ)));
+                normalize!(ψ1)
+                diff = 2*log(norm(dot(ψ, ψ1)))
+                ψ = copy(ψ1)
 
-            Tψ = 𝕋*ψ 
-            f = log(dot(ψ, Tψ)) / L
-            normalize!(Tψ)
+                Tψ = 𝕋*ψ 
+                f = log(dot(ψ, Tψ)) / L
+                normalize!(Tψ)
 
-            var = -2*log(norm(dot(ψ, Tψ))) / L |> real
-            if abs(var) < varm 
-                varm = abs(var) 
-                ψm = copy(ψ)
+                var = -2*log(norm(dot(ψ, Tψ))) / L |> real
+                if abs(var) < varm 
+                    varm = abs(var) 
+                    ψm = copy(ψ)
+                end
+
+                push!(fs, f)
+                push!(vars, abs(var))
+                push!(diffs, diff)
             end
-
-            push!(fs, f)
-            push!(vars, abs(var))
-            push!(diffs, diff)
+            push!(ψms, ψm)
+            @show L, χ, minimum(vars)
         end
-        push!(ψms, ψm)
-        @show L, χ, minimum(vars)
+    elseif L == 1
+        ψm = InfiniteMPS([ph_space], [ℂ^χs[1]]);
+        for χ in χs
+            varm = 1
+            ψ = copy(ψm)
+            Tψ = 𝕋*ψ;
+            normalize!(Tψ) 
+            for ix in 1:Npower
+                ψ1 = changebonds(Tψ, SvdCut(trscheme=truncdim(χ)));
+                normalize!(ψ1)
+                diff = 2*log(norm(dot(ψ, ψ1)))
+                ψ = copy(ψ1)
+
+                f = log(dot(ψ, 𝕋, ψ)) # not accurate 
+
+                Tψ = 𝕋*ψ 
+                normalize!(Tψ)
+
+                var = -2*log(norm(dot(ψ, Tψ))) |> real
+                if abs(var) < varm 
+                    varm = abs(var) 
+                    ψm = copy(ψ)
+                end
+
+                push!(fs, f)
+                push!(vars, abs(var))
+                push!(diffs, diff)
+            end
+            push!(ψms, ψm)
+            @show L, χ, minimum(vars)
+        end
     end
     @save filename*"L$(L).jld" {compress=true} fs vars diffs ψms 
     return fs, vars, diffs, ψms  
@@ -297,11 +409,7 @@ function filename_gen(mpo_choice::Symbol, boundary_condition::Symbol; more_info=
         d_ph = 4;
         filename = "nonfrustrated_T_";
     end
-    if boundary_condition == :obc 
-        filename = filename * "obc_"
-    else
-        filename = filename * "pbc_"
-    end
+    filename = filename * String(boundary_condition) * "_"
 
     return filename * more_info
 end

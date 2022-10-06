@@ -11,9 +11,9 @@ boundary_condition = :obc # :pbc, :obc
 filenameR = filename_gen(mpo_choiceR, boundary_condition)
 filenameL = filename_gen(mpo_choiceL, boundary_condition)
 
-Ls = [6, 12, 18, 24, 30, 36, 48, 60]; 
+Ls = [6, 12, 18, 24, 30]; 
 #Ls = [72, 84, 96]; 
-χs = [4, 8, 12, 16, 20, 24, 28, 32];
+χs = [4, 8, 12, 16, 20, 24, 28, 32]; 
 
 for L in Ls
     @load filenameR * "L$(L).jld" ψms
@@ -24,8 +24,8 @@ for L in Ls
     𝕋R = mpo_gen(L, mpo_choiceR, boundary_condition);
     𝕋L = mpo_gen(L, mpo_choiceL, boundary_condition);
 
-    obtain_1st_excitation_R = operation_scheme(0.5, 0, [ψL], [ψR])
-    obtain_1st_excitation_L = operation_scheme(0.5, 0, [ψR], [ψL])
+    obtain_1st_excitation_R = operation_scheme(0.5, 0, [ψL], [ψR]);
+    obtain_1st_excitation_L = operation_scheme(0.5, 0, [ψR], [ψL]);
 
     fsR, varsR, diffsR, ψmsR = power_projection(𝕋R, χs; operation=obtain_1st_excitation_R, filename=filenameR * "1st_excitation_"); 
     fsL, varsL, diffsL, ψmsL = power_projection(𝕋L, χs; operation=obtain_1st_excitation_L, filename=filenameL * "1st_excitation_"); 
