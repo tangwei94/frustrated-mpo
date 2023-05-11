@@ -6,9 +6,6 @@ include("utils.jl");
 
 β = log(1+sqrt(2)) / 2
 
-T, P, Pinv, Pdag, Pdaginv = tensor_trivial(β, 1e-1);
-# TODO. test other P's
-
 T = tensor_triangular_AF_ising_alternative()
 Tdag = mpotensor_dag(T)
 Pmat = TensorMap(rand, ComplexF64, ℂ^4, ℂ^4)
@@ -17,22 +14,21 @@ Pinvmat = inv(Pmat)
 Pdaginvmat = Pinvmat'
 P, Pinv = add_util_leg(Pmat), add_util_leg(Pinvmat)
 Pdag, Pdaginv = add_util_leg(Pdagmat), add_util_leg(Pdaginvmat)
-@show eigvals(Pmat.data)
+@show eigvals(Pmat.data); 
 
 # ED
-L = 3
-𝕋 = mpo_gen(L, T, :pbc)
-ℙ = mpo_gen(L, P, :pbc)
-ℙinv = mpo_gen(L, Pinv, :pbc)
-ℙdag = mpo_gen(L, Pdag, :pbc)
-ℙdaginv = mpo_gen(L, Pdaginv, :pbc)
+L = 6
+𝕋 = mpo_gen(L, T, :pbc);
+ℙ = mpo_gen(L, P, :pbc);
+ℙinv = mpo_gen(L, Pinv, :pbc);
+ℙdag = mpo_gen(L, Pdag, :pbc);
+ℙdaginv = mpo_gen(L, Pdaginv, :pbc);
 
-@show (ℙ * ℙinv).opp[1].data
+@show (ℙ * ℙinv).opp[1].data;
 
 𝕋mat = convert_to_mat(𝕋);
 𝔹mat = convert_to_mat(ℙ*𝕋*ℙinv);
-𝔹dagmat = convert_to_mat(ℙdaginv*𝕋*ℙdag);
-@show norm(𝔹mat.data' - 𝔹dagmat.data)
+𝔹dagmat = 𝔹mat';
 
 Λt, Ut = eig(𝕋mat);
 Λt = diag(Λt.data)
@@ -52,52 +48,47 @@ L = 3
 δ1b = Tensor(zeros, ComplexF64, ℂ^length(Λb));
 δ1b.data[end-1] = 1;
 ψ1b = Ub * δ1b;
-@show dot(ψ1b, ψb);
+@show dot(ψ1b, ψb) |> norm;
 
 @show ψbl = δb' * inv(Ub);
 @show ψbl * ψb / norm(ψbl) / norm(ψb);
 
 # finite MPS computation
-Ls = [4, 8, 12, 16, 20, 24, 32, 40]
-χs = [2, 4, 8, 12]
-ψ0s, ψls, ψrs = FiniteMPS[], FiniteMPS[], FiniteMPS[]
-fs, fbs = Float64[], Float64[]
+Ls = [4, 8, 12, 16, 20, 24, 32, 40, 50, 60]
+χs = [4, 8, 12, 16]
+ψls, ψrs = FiniteMPS[], FiniteMPS[]
+fs = Float64[]
 for L in Ls
-    𝕋 = mpo_gen(L, T, :pbc);
-    𝕋dag = mpo_gen(L, Tdag, :pbc);
-    ℙ = mpo_gen(L, P, :pbc);
-    ℙinv = mpo_gen(L, Pinv, :pbc);
-    ℙdag = mpo_gen(L, Pdag, :pbc);
-    ℙdaginv = mpo_gen(L, Pdaginv, :pbc);
+    𝕋 = mpo_gen(L, T, :obc);
+    𝕋dag = mpo_gen(L, Tdag, :obc);
 
-    𝔹 = ℙ*𝕋*ℙinv;
-    𝔹dag = ℙdaginv*𝕋dag*ℙdag;
+    f1, vars1, diffs1, ψms1 = power_projection(𝕋, χs; Npower=50, operation=gs_operation);
+    f2, vars2, diffs2, ψms2 = power_projection(𝕋dag, χs; Npower=50, operation=gs_operation);
 
-    f, vars, diffs, ψms = power_projection(𝕋, χs; Npower=30, operation=gs_operation);
-    f1, vars1, diffs1, ψms1 = power_projection(𝔹, χs; Npower=30, operation=gs_operation);
-    f2, vars2, diffs2, ψms2 = power_projection(𝔹dag, χs; Npower=30, operation=gs_operation);
+    @show dot(ψms1[end], ψms2[end]) |> norm
 
-    @show dot(ψms1[end], ψms2[end])
-
-    push!(ψ0s, ψms[end])
     push!(ψrs, ψms1[end])
     push!(ψls, ψms2[end])
 
-    push!(fs, real(log(dot(ψms[end], 𝕋, ψms[end]))) / L)
-    push!(fbs, real(log(dot(ψms2[end], 𝔹, ψms1[end]) / dot(ψms2[end], ψms1[end]))) / L)
+    push!(fs, real(log(dot(ψms2[end], 𝕋, ψms1[end]) / dot(ψms2[end], ψms1[end]))) / L)
 end
+@show norm.(fs)
+
+fidel(x, y) = norm(dot(x, y)) / norm(x) / norm(y)
 
 ψes = FiniteMPS[] 
 f1s = Float64[] 
 χs = [2, 4, 8, 12, 16]
-for (L, ψ) in zip(Ls, ψ0s)
+for (L, ψL, ψR) in zip(Ls, ψls, ψrs)
 
-    𝕋 = mpo_gen(L, T, :pbc);
-    obtain_1st_excitation_0 = operation_scheme(0.2, 0, [ψ], [ψ]);
-    _, _, _, ψms = power_projection(𝕋, χs; Npower = 50, operation = obtain_1st_excitation_0);
+    𝕋 = mpo_gen(L, T, :obc);
+    ℙ = mpo_gen(L, P, :obc);
+    obtain_1st_excitation = operation_scheme(0.2, 0, [ψL], [ψL]);
+    _, _, _, ψms = power_projection(𝕋, χs; Npower = 50, operation = obtain_1st_excitation);
 
     push!(ψes, ψms[end])
-    @show dot(ψms[end], ψ) |> norm
+    @show fidel(ψms[end], ψR) 
+    @show fidel(ℙ * ψms[end], ℙ * ψR) 
 end
 
 

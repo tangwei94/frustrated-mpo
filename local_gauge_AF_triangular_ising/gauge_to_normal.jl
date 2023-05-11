@@ -2,47 +2,47 @@ using LinearAlgebra, TensorKit, MPSKit, MPSKitModels, KrylovKit
 using JLD2
 using Plots
 
-include("utils.jl");
-#T = tensor_triangular_AF_ising()
-#Tdag = tensor_triangular_AF_ising_T()
-#𝕋 = mpo_gen(1, T, :inf)
-#𝕋dag = mpo_gen(1, Tdag, :inf)
-#
-#@tensor t1[-1; -2] := 𝕋.opp[1][1 -1 -2 1]
+include("../utils.jl");
+T = tensor_triangular_AF_ising()
+Tdag = tensor_triangular_AF_ising_T()
+𝕋 = mpo_gen(1, T, :inf)
+𝕋dag = mpo_gen(1, Tdag, :inf)
 
-β = log(1+sqrt(2)) / 2 
+aaa = convert(InfiniteMPS, 𝕋*𝕋dag)
+bbb = convert(InfiniteMPS, 𝕋dag*𝕋)
 
-T, P, Pinv, Pdag, Pdaginv = tensor_trivial(β, 1e-1);
-P = add_util_leg(TensorMap(rand(2, 2), ℂ^2, ℂ^2))
-Pdag = add_util_leg(TensorMap(Matrix(P.data'), ℂ^2, ℂ^2))
-Pinv = add_util_leg(TensorMap(Matrix(inv(P.data)), ℂ^2, ℂ^2))
-Pdaginv = add_util_leg(TensorMap(Matrix(inv(P.data')), ℂ^2, ℂ^2))
-
-𝔸 = DenseMPO(T)
-ℙ = DenseMPO(P)
-ℙinv = DenseMPO(Pinv)
-ℙdag = DenseMPO(Pdag)
-ℙdaginv = DenseMPO(Pdaginv)
-
-𝕋 = ℙ*𝔸*ℙinv;
-𝕋dag = ℙdaginv*𝔸*ℙdag;
+-norm(dot(aaa, bbb))
 
 @tensor t1[-1; -2] := 𝕋.opp[1][1 -1 -2 1]
-@tensor p1[-1; -2] := ℙ.opp[1][1 -1 -2 1]
-@tensor pinv1[-1; -2] := ℙinv.opp[1][1 -1 -2 1]
 
-pinv1 * t1 * p1
+#β = log(1+sqrt(2)) / 2 
+
+#T, P, Pinv, Pdag, Pdaginv = tensor_trivial(β, 1e-1);
+#P = add_util_leg(TensorMap(rand(2, 2), ℂ^2, ℂ^2))
+#Pdag = add_util_leg(TensorMap(Matrix(P.data'), ℂ^2, ℂ^2))
+#Pinv = add_util_leg(TensorMap(Matrix(inv(P.data)), ℂ^2, ℂ^2))
+#Pdaginv = add_util_leg(TensorMap(Matrix(inv(P.data')), ℂ^2, ℂ^2))
+#
+#𝔸 = DenseMPO(T)
+#ℙ = DenseMPO(P)
+#ℙinv = DenseMPO(Pinv)
+#ℙdag = DenseMPO(Pdag)
+#ℙdaginv = DenseMPO(Pdaginv)
+#
+#𝕋 = ℙ*𝔸*ℙinv;
+#𝕋dag = ℙdaginv*𝔸*ℙdag;
+
+@tensor t1[-1; -2] := 𝕋.opp[1][1 -1 -2 1]
+#@tensor p1[-1; -2] := ℙ.opp[1][1 -1 -2 1]
+#@tensor pinv1[-1; -2] := ℙinv.opp[1][1 -1 -2 1]
+
+#pinv1 * t1 * p1
 
 Λ1, P1 = eigen(t1)
+Pinv1 = inv(P1)
 inv(P1) * t1 * P1
 
-x1 = (p1 * σx)[1,1] / P1[1,1]
-x2 = (p1 * σx)[2,2] / P1[2,2]
-λ = TensorMap([1/x1 0; 0 1/x2], ℂ^2, ℂ^2)
-p1 * σx * λ - P1
-Pinv1 = inv(P1)
-
-pinv1' * pinv1
+#pinv1' * pinv1
 # P 可以随意乘unitary，并随意rescale? (不可以随便 rescale) 
 
 hs = zeros(4)

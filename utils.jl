@@ -7,7 +7,7 @@ const MPOTensor{S} = AbstractTensorMap{S,2,2} where {S<:EuclideanSpace}
 # copied from MPSKit.jl/src/utility.jl
 _firstspace(t::AbstractTensorMap) = space(t, 1)
 _lastspace(t::AbstractTensorMap) = space(t, numind(t))
-
+    
 """
     tensor_trivial()
 
@@ -58,6 +58,30 @@ function tensor_triangular_AF_ising()
 end
 
 """
+    tensor_percolation(p1::Float64, p2::Float64)
+"""
+function tensor_percolation(p1::Float64, p2::Float64)
+    δ = TensorMap(zeros, ComplexF64, ℂ^2*ℂ^2, ℂ^2)
+    S = TensorMap(zeros, ComplexF64, ℂ^2, ℂ^2*ℂ^2)
+    f = isomorphism(ℂ^4, ℂ^2*ℂ^2)
+
+    δ[1, 1, 1] = 1
+    δ[2, 2, 2] = 1
+
+    S[1, 1, 1] = 1
+    S[1, 1, 2] = 0
+    S[1, 2, 1] = 1-p1 
+    S[1, 2, 2] = p1
+    S[2, 1, 1] = 1-p1 
+    S[2, 1, 2] = p1 
+    S[2, 2, 1] = 1-p2 
+    S[2, 2, 2] = p2
+
+    @tensor T[-1, -2; -3, -4] := f[-1, 1, 2] * δ[1, -2, 3] * S[3, 6, 5] * f'[6, 7, -4] * δ[4, 5, 7] * S[2, 4, -3] 
+    return T
+end 
+
+"""
     tensor_triangular_AF_ising_T()
     
     frustrated MPO. The other direction.
@@ -103,7 +127,7 @@ end
 
     non-frustrated MPO. gauge the physical dim to be 2.
 """
-function tensor_triangular_AF_ising_adapted()
+function tensor_triangular_AF_ising_adapted() # TODO. fix bug
 
     p = TensorMap(zeros, ComplexF64, ℂ^2*ℂ^2, ℂ^2)
     m = TensorMap(zeros, ComplexF64, ℂ^2, ℂ^4*ℂ^2)
@@ -123,6 +147,18 @@ function tensor_triangular_AF_ising_adapted()
     V = permute(V, (1, 2), (3, 4))
     @tensor T[-1, -2; -3, -4] := S[-1, 1] * V[1, -2, -3, 2] * U[2, -4]
     return T
+end
+
+"""
+    mpotensor_dag(T::MPOTensor)
+
+    Generate the hermitian conjugate of a MPO.
+"""
+function mpotensor_dag(T::MPOTensor)
+    T_data = reshape(T.data, (dims(codomain(T))..., dims(domain(T))...))
+    Tdag_data = permutedims(conj.(T_data), (1, 3, 2, 4))
+    
+    return TensorMap(Tdag_data, space(T))
 end
 
 """
@@ -414,3 +450,43 @@ function filename_gen(mpo_choice::Symbol, boundary_condition::Symbol; more_info=
     return filename * more_info
 end
 
+
+function ChainRulesCore.rrule(::typeof(TensorKit.exp), K::TensorMap)
+    W, UR = eig(K)
+    UL = inv(UR)
+    Ws = []
+
+    if W.data isa Matrix 
+        Ws = diag(W.data)
+    elseif W.data isa TensorKit.SortedVectorDict
+        Ws = vcat([diag(values) for (_, values) in W.data]...)
+    end
+
+    expK = UR * exp(W) * UL
+
+    function exp_pushback(f̄wd)
+        ēxpK = f̄wd 
+       
+        K̄ = zero(K)
+
+        if ēxpK != ZeroTangent()
+            if W.data isa TensorKit.SortedVectorDict
+                # TODO. symmetric tensor
+                error("symmetric tensor. not implemented")
+            end
+            function coeff(a::Number, b::Number) 
+                if a ≈ b
+                    return exp(a)
+                else 
+                    return (exp(a) - exp(b)) / (a - b)
+                end
+            end
+            M = UR' * ēxpK * UL'
+            M1 = similar(M)
+            copyto!(M1.data, M.data .* coeff.(Ws', conj.(Ws)))
+                        K̄ += UL' * M1 * UR'# - tr(ēxpK * expK') * expK'
+        end
+        return NoTangent(), K̄
+    end 
+    return expK, exp_pushback
+end

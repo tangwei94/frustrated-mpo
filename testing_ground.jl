@@ -4,21 +4,33 @@ using Plots
 
 include("utils.jl");
 
-A = TensorMap(rand, ComplexF64, ℂ^2, ℂ^2)
-X = TensorMap([0. 1.; 1. 0.], ℂ^2, ℂ^2)
-B = TensorMap(rand, ComplexF64, ℂ^2, ℂ^2)
-A = A + A'
+A = TensorMap(rand, ComplexF64, ℂ^2*ℂ^2, ℂ^2*ℂ^2);
+X = TensorMap(ComplexF64[1 0; 0 -1], ℂ^2, ℂ^2);
+B = TensorMap(rand, ComplexF64, ℂ^2, ℂ^2);
+Adata = reshape(A.data, (2,2,2,2))
+Adata = Adata + conj.(permutedims(Adata,(1, 3, 2, 4)));
+Adata = reshape(Adata, (4,4))
+A = TensorMap(Adata, ℂ^2*ℂ^2, ℂ^2*ℂ^2)
+permute(A, (1,3,2,4)) 
+
 B = B + B'
-A = add_util_leg(A)
 B = add_util_leg(B)
 X = add_util_leg(X)
 
 𝔸 = DenseMPO([A])
 𝔹 = DenseMPO([B])
 𝕏 = DenseMPO([X])
+𝔹 = 𝕏
+
+eigen(B.data)
 
 𝕋 = 𝔸 * 𝔹
 𝕋dag = 𝔹 * 𝔸
+
+#T = tensor_percolation(0.5, 0.5);
+#Tdag = mpotensor_dag(T)
+#𝕋 = mpo_gen(1, T, :inf)
+#𝕋dag = mpo_gen(1, Tdag, :inf)
 
 @tensor t1[-1; -2] := 𝕋.opp[1][1 -1 -2 1]
 Λ1, P1 = eigen(t1)
@@ -62,11 +74,16 @@ res = optimize(x -> AAprime_straight(𝕋, 𝕋dag, x), g_AAprime_straight!, hs,
 hs = Optim.minimizer(res)
 AAprime_straight(𝕋, 𝕋dag, hs)
 
+Hmat = [hs[1] hs[2] + im*hs[3] ; hs[2] - im*hs[3] hs[4]]
+H = TensorMap(Hmat, ℂ^2, ℂ^2)
+H = H + H'
+G = exp(H)
+Ginv = exp(-H)
 
+Λ, U = eigen(G)
+@show sqrt(Λ) 
 
-
-
-
+"""
 T = tensor_triangular_AF_ising_alternative()
 T = tensor_triangular_AF_ising()
 
@@ -102,3 +119,28 @@ xlabel!("number of domain walls")
 ylabel!("number of samples (1000 in total)")
 histogram!(σs, alpha=0.5, color=:red, bins=1:L, label="original")
 histogram!(σs_P, alpha=0.5, color=:blue, bins=1:L, label="after gauge")
+
+
+ψ = InfiniteMPS([ℂ^2], [ℂ^10])
+ϕ = InfiniteMPS([ℂ^2], [ℂ^10])
+
+dot(ϕ, ψ) 
+
+P = TensorMap(rand, ComplexF64, ℂ^2, ℂ^2)
+ℙ = DenseMPO([add_util_leg(P)])
+
+ψ1 = ℙ * ψ
+ϕ1 = ℙ * ϕ
+dot(ψ1, ϕ1)
+
+L = 40
+ψ = FiniteMPS(rand, ComplexF64, L, ℂ^2, ℂ^10)
+ϕ = FiniteMPS(rand, ComplexF64, L, ℂ^2, ℂ^10)
+
+dot(ψ, ϕ) / norm(ψ) / norm(ϕ) |> norm
+ℙ = DenseMPO(fill(add_util_leg(P), L))
+
+ψ1 = ℙ * ψ
+ϕ1 = ℙ * ϕ
+dot(ψ1, ϕ1) / norm(ψ1) / norm(ϕ1) |> norm
+"""
