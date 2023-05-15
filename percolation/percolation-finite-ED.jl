@@ -4,10 +4,12 @@ using JLD2
 
 include("../utils.jl");
 
+p1, p2 = 0.5, 1 
+T = tensor_percolation(p1, p2)
+
 L = 6
 boundary_condition = :pbc
 
-T = tensor_percolation(0.5, 0.5)
 Tdag = mpotensor_dag(T)
 𝕋 = mpo_gen(L, T, boundary_condition);
 𝕋dag = mpo_gen(L, Tdag, boundary_condition);
