@@ -76,25 +76,30 @@ end
 
 """
     tensor_percolation(p1::Float64, p2::Float64)
+
+    Domany-Kinzel model. See E. Domany, W. Kinzel, Phys. Rev. Lett. 53, 311–314
+(1984). A clearer description of the model can be found in H. Hinrichsen, Adv. Phys. 49, 815–958 (2000). 
 """
-function tensor_percolation(p1::Float64, p2::Float64)
-    δ = TensorMap(zeros, ComplexF64, ℂ^2*ℂ^2, ℂ^2)
-    S = TensorMap(zeros, ComplexF64, ℂ^2, ℂ^2*ℂ^2)
-    f = isomorphism(ℂ^4, ℂ^2*ℂ^2)
+function tensor_percolation(p1::Real, p2::Real)
+    δ = TensorMap(zeros, ComplexF64, ℂ^2, ℂ^2*ℂ^2)
+    S = TensorMap(zeros, ComplexF64, ℂ^2*ℂ^2, ℂ^2)
 
     δ[1, 1, 1] = 1
     δ[2, 2, 2] = 1
 
     S[1, 1, 1] = 1
-    S[1, 1, 2] = 0
-    S[1, 2, 1] = 1-p1 
-    S[1, 2, 2] = p1
-    S[2, 1, 1] = 1-p1 
-    S[2, 1, 2] = p1 
-    S[2, 2, 1] = 1-p2 
-    S[2, 2, 2] = p2
+    S[1, 2, 1] = 0
+    S[1, 2, 2] = S[2, 2, 1] = p1 
+    S[1, 1, 2] = S[2, 1, 1] = 1 - p1
+    S[2, 2, 2] = p2 
+    S[2, 1, 2] = 1 - p2
 
-    @tensor T[-1, -2; -3, -4] := f[-1, 1, 2] * δ[1, -2, 3] * S[3, 6, 5] * f'[6, 7, -4] * δ[4, 5, 7] * S[2, 4, -3] 
+    @tensor A[-1 -2; -3 -4] := S[-1 -2; 1] * δ[1; -3 -4]
+    @tensor B[-1 -2; -3 -4] := δ[-1; -3 1] * S[1 -2; -4]
+
+    t_fuse = isomorphism(ℂ^4, ℂ^2*ℂ^2)
+    @tensor T[-1 -2; -3 -4] := t_fuse[-1; 1 2] * A[2 3; -3 5] * B[1 -2; 3 4] * t_fuse'[4 5; -4]
+
     return T
 end 
 
