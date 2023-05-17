@@ -2,7 +2,7 @@ using LinearAlgebra, TensorKit, MPSKit, MPSKitModels, KrylovKit
 using JLD2
 using Plots
 
-include("utils.jl");
+include("../utils.jl");
 
 L = 6
 boundary_condition = :pbc
