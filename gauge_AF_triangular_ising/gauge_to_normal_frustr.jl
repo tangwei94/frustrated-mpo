@@ -24,7 +24,7 @@ end
 function f_normality(τ::Real)
     if τ === Inf
         @show "inf"
-        Tn1 = tensor_triangular_AF_ising_alternative()
+        Tn1 = tensor_triangular_AF_ising_adapted()
         Tndag1 = mpotensor_dag(Tn1)
         χ = 4
         @show Tn1
@@ -56,11 +56,11 @@ function f_normality(τ::Real)
     _fg(K) = (f_normality2(K), f_normality2'(K))
     inner(K, K1, K2) = real(dot(K1, K2))
 
-    optalg_LBFGS = OptimKit.LBFGS(;maxiter=200, gradtol=1e-12, verbosity=2)
+    optalg_LBFGS = OptimKit.LBFGS(;maxiter=200, gradtol=1e-12, verbosity=1)
     
     K0 = TensorMap(rand, ComplexF64, ℂ^χ, ℂ^χ)
-    @show _fg(K0)
-    Kopt, _, _, _, _ = OptimKit.optimize(_fg, K0, optalg_LBFGS; inner=inner)
+    Kopt, fvalue, _, _, _ = OptimKit.optimize(_fg, K0, optalg_LBFGS; inner=inner)
+    @show fvalue
     G = exp(0.5*(Kopt+Kopt'))
     Λ, U = eigh(G)
     P = sqrt(Λ) * U'
@@ -76,20 +76,36 @@ function f_normality(τ::Real)
 
 end
 
-normality, 𝕋n1 = f_normality(4)
-normality, 𝕋n1 = f_normality(Inf)
+normality, 𝕋n1 = f_normality(5)
+normality, 𝕋n_nf = f_normality(Inf)
+
+norm(𝕋n1.opp[1])
+norm(𝕋n_nf.opp[1])
+
+aaa_nf = convert(InfiniteMPS, 𝕋n_nf)
+bbb_nf = convert(InfiniteMPS, 𝕋n1)
+dot(aaa_nf, bbb_nf)
 
 normalities = Float64[]
-τs = -3:0.5:3
+fidelities_with_Tnf = Float64[]
+τs = -4:0.5:4
 for τ in τs 
-    y = f_normality(τ)[1]
+    y, 𝕋tmp = f_normality(τ)
+
+    aaa_nf = convert(InfiniteMPS, 𝕋n_nf)
+    bbb_nf = convert(InfiniteMPS, 𝕋tmp)
+
     push!(normalities, y)
+    push!(fidelities_with_Tnf, norm(dot(aaa_nf, bbb_nf)))
     @show τ, y, log(y)
 end
 
-fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 400))
+fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 600))
 ax1 = Axis(fig[1, 1], xlabel=L"\tau", ylabel=L"\mathrm{fidel}(T T^\dagger, T^\dagger T)")
 scatter1 = CairoMakie.scatter!(ax1, τs, normalities, marker=:circle, markersize=10)
+@show fig
+ax2 = Axis(fig[2, 1], xlabel=L"\tau", ylabel=L"\mathrm{fidel}(T, T_0)")
+scatter2 = CairoMakie.scatter!(ax2, τs, fidelities_with_Tnf, marker=:circle, markersize=10)
 @show fig
 save("gauged-frustrated-mpo-normal-meas.pdf", fig)
 
@@ -123,6 +139,7 @@ fs2, normality2 = optimize_with_τ(2, 10000)
 fs1, normality1 = optimize_with_τ(1, 10000)
 
 @save "gauge_AF_triangular_ising/data/VUMPS_data.jld2" fsinf fs3 fs2 fs1
+@load "gauge_AF_triangular_ising/data/VUMPS_data.jld2" fsinf fs3 fs2 fs1
 
 f_exact = 0.3230659669
 

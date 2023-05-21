@@ -149,7 +149,7 @@ end
 
     non-frustrated MPO. gauge the physical dim to be 2.
 """
-function tensor_triangular_AF_ising_adapted() # TODO. fix bug
+function tensor_triangular_AF_ising_adapted() 
 
     p = TensorMap(zeros, ComplexF64, ℂ^2*ℂ^2, ℂ^2)
     m = TensorMap(zeros, ComplexF64, ℂ^2, ℂ^4*ℂ^2)
@@ -157,15 +157,18 @@ function tensor_triangular_AF_ising_adapted() # TODO. fix bug
     p[1, 1, 1] = p[2, 2, 2] = 1
     #m[1, 1, 1] = m[1, 2, 2] = m[2, 3, 1] = m[2, 4, 2] = 1
     m[1, 1, 1] = m[2, 2, 1] = m[1, 3, 2] = m[2, 4, 2] = 1
-    @tensor A[-1, -2; -3, -4] := p[1, -2, -4] * m[-1, -3, 1]
+    #@tensor A[-1, -2; -3, -4] := p[1, -2, -4] * m[-1, -3, 1]
 
     δ = isomorphism(ℂ^16, (ℂ^2)'*ℂ^4*ℂ^2)
     δ = permute(δ, (1, 2), (3, 4))
 
     T0 = tensor_triangular_AF_ising_alternative()
-    @tensor T1[-1, -2; -3, -4] := δ[-1, 5, 4, 3] * A[3, -2, 1, 6] * T0[4, 1, 2, 7] * A'[2, 8, 5, -3] * δ'[7, 6, -4, 8]
+    #@tensor T1[-1, -2; -3, -4] := δ[-1, 5, 4, 3] * A[3, -2, 1, 6] * T0[4, 1, 2, 7] * A'[2, 8, 5, -3] * δ'[7, 6, -4, 8]
+    #@tensor T1[-1 -2; -3 -4] := δ[-1 3 ; 2 1] * m[1 ; 4 6] * T0[2 4 ; 5 7] * m'[5 8; 3] * p[6 -2; 9] * p'[10 8 -3] * δ'[7 9 ; -4 10]
+    @tensor T1[-1 -2; -3 -4] := δ[-1 3 ; 2 1] * p[1 -2 ; 4] * m[4 ; 5 7] * T0[2 5 ; 6 8] * m'[6 9 ; 3] * p'[10 9; -3] * δ'[8 7 ; -4 10]
 
     U, S, V, _ = tsvd(permute(T1, (1, ), (2, 3, 4)), trunc = truncerr(1e-12))
+    @show S
     V = permute(V, (1, 2), (3, 4))
     @tensor T[-1, -2; -3, -4] := S[-1, 1] * V[1, -2, -3, 2] * U[2, -4]
     return T
