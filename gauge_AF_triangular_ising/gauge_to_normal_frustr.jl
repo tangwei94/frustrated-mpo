@@ -111,13 +111,13 @@ save("gauged-frustrated-mpo-normal-meas.pdf", fig)
 
 function optimize_with_τ(τ::Real, maxiter::Int=10000)
     if τ === Inf
-        normality, Tn1 = 1, tensor_triangular_AF_ising_alternative()
+        normality, Tn1 = 1, tensor_triangular_AF_ising_adapted()
         𝕋n1 = mpo_gen(1, Tn1, :inf)
-        ψt0 = InfiniteMPS([ℂ^4], [ℂ^8])
     else
         normality, 𝕋n1 = f_normality(τ)
-        ψt0 = InfiniteMPS([ℂ^2], [ℂ^8])
     end
+    
+    ψt0 = InfiniteMPS([ℂ^2], [ℂ^8])
 
     expand_alg = OptimalExpand(truncdim(8))
     optim_alg = VUMPS(tol_galerkin=1e-12, maxiter=maxiter)
@@ -139,7 +139,6 @@ fs2, normality2 = optimize_with_τ(2, 10000)
 fs1, normality1 = optimize_with_τ(1, 10000)
 
 @save "gauge_AF_triangular_ising/data/VUMPS_data.jld2" fsinf fs3 fs2 fs1
-@load "gauge_AF_triangular_ising/data/VUMPS_data.jld2" fsinf fs3 fs2 fs1
 
 f_exact = 0.3230659669
 
