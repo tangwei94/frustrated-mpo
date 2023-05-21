@@ -1,6 +1,5 @@
 using LinearAlgebra, TensorKit, MPSKit, MPSKitModels, KrylovKit
 using JLD2
-using Plots
 
 include("../utils.jl");
 T = tensor_triangular_AF_ising()
