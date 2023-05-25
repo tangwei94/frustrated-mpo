@@ -42,11 +42,36 @@ end
 EEs = [real(entropy(ψ)[1]) for ψ in ψs]
 χs = 8:8:64
 
-τ = -0.1
-ℙ = generate_P(τ)[2]
-ψτs = Ref(ℙ) .* ψs;
+function RDM_after_gauge(ψ, τ, O)
+    expO = exp(-τ * O)
+    ψt = ψ.AL[1]
+    @tensor Pψt[-1 -2; -3] := ψt[-1 1 ; -3] * expO[-2 1]
 
-EE1s = [real(entropy(ψτ)[1]) for ψτ in ψτs]
+    transferR = TransferMatrix(Pψt)
+    transferL = TransferMatrix(Pψt, nothing, Pψt, true)
+    sp = left_virtualspace(ψ, 1)
+    v0 = TensorMap(rand, ComplexF64, sp, sp)
+
+    val, ρr, _ = eigsolve(transferR, v0, 1, :LM)
+    val, ρl, _ = eigsolve(transferL, v0, 1, :LM)
+    ρr = ρr[1] / ρr[1][1] * abs(ρr[1][1])
+    ρl = ρl[1] / ρl[1][1] * abs(ρl[1][1])
+
+    Λr, Vr = eigh(ρr)
+    Λl, Vl = eigh(ρl)
+
+    C = sqrt(Λl) * Vl' * Vr * sqrt(Λr)
+    rdm = C * C' / tr(C * C')
+    EE = -tr(MPSKit.safe_xlogx(rdm))
+
+    return rdm, real(EE)
+end
+
+for ix in 1:8
+    @show RDM_after_gauge(ψs[ix], 0, σz)[2] - EEs[ix] |> norm
+end
+
+EE1s = [RDM_after_gauge(ψ, 0.2, σz)[2] for ψ in ψs]
 
 fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 400))
 ax1 = Axis(fig[1, 1], xlabel=L"\ln \chi", ylabel=L"S")
@@ -56,39 +81,20 @@ axislegend(ax1; position=:rb)
 @show fig
 save("square_ising/data/EEs-local-gauge.pdf", fig)
 
-ψ0 = ψs[4]
-EExs = Float64[]
-EEzs = Float64[]
-EEys = Float64[]
-xs, ys, zs = Float64[], Float64[], Float64[]
-τs = -1:0.1:1
-
-for τ in τs
-    ℙx = generate_P(τ, σx)[2]
-    ϕx = ℙx * ψ0
-    push!(EExs, real(entropy(ϕx)[1]))
-    ℙz = generate_P(τ, σz)[2]
-    ϕz = ℙz * ψ0
-    push!(EEzs, real(entropy(ϕz)[1]))
-    ℙy = generate_P(τ, σy)[2]
-    ϕy = ℙy * ψ0
-    push!(EEys, real(entropy(ϕy)[1]))
-    push!(xs, real(expectation_value(ϕx, σx)[1]))
-    push!(ys, real(expectation_value(ϕy, σy)[1]))
-    push!(zs, real(expectation_value(ϕz, σz)[1]))
+τs = -0.1:0.001:0.1
+EExs = []
+for ix in 1:8
+    push!(EExs, [RDM_after_gauge(ψs[ix], τ, σx)[2] for τ in τs])
+    @show left_virtualspace(ψs[ix], 1)
 end
+@save "square_ising/data/VUMPS_hermitian_betac.jld2" ψs fs EExs τs
 
-fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 800))
-ax1 = Axis(fig[1, 1], xlabel=L"\tau", ylabel=L"S")
-scatterx = scatter!(ax1, τs, abs.(EExs) .+ 1e-16, label=L"\sigma^x")
-scattery = scatter!(ax1, τs, abs.(EEys) .+ 1e-16, label=L"\sigma^y")
-scatterz = scatter!(ax1, τs, abs.(EEzs) .+ 1e-16, label=L"\sigma^z")
+fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 400))
+ax1 = Axis(fig[1, 1], xlabel=L"\tau", ylabel=L"S_E")
+for ix in 2:8
+    lines!(ax1, τs, abs.(EExs[ix]) .+ 1e-16, label="σˣ, $(left_virtualspace(ψs[ix], 1))")
+end
+#liney = lines!(ax1, τs, abs.(EEys) .+ 1e-16, label=L"\sigma^y")
+#linez = lines!(ax1, τs, abs.(EEzs) .+ 1e-16, label=L"\sigma^z")
 axislegend(ax1; position=:rb)
-@show fig
-
-ax2 = Axis(fig[2, 1], xlabel=L"\tau", ylabel=L"\langle O \rangle")
-scatterx = scatter!(ax2, τs, xs, label=L"O = \sigma^x")
-scattery = scatter!(ax2, τs, ys, label=L"O = \sigma^y")
-scatterz = scatter!(ax2, τs, zs, label=L"O = \sigma^z")
-axislegend(ax2; position=:rt)
 @show fig
