@@ -18,12 +18,13 @@ end
 
 L = 16
 ψ = ψs[4]
-τ = 0.
 
-ψlp = circular_mps(ψ, L, τ);
+ϕ0 = circular_mps(ψ, L, 0);
+ϕp = circular_mps(ψ, L, 0.2); 
+ϕm = circular_mps(ψ, L, -0.2); 
 
 Uy = DenseMPO(fill(add_util_leg(exp(-im*pi*σy/4)), L))
-function meas_σx()
+function meas_σx(ψlp)
 
     σxs = perfect_sampling(Uy * ψlp)
 
@@ -31,15 +32,33 @@ function meas_σx()
 
 end
 
-Xs = map(1:100*L) do ix
-    @show ix 
-    return meas_σx()
+X0s = map(1:50*L) do ix
+    ix % 10 == 0 && (@show ix) 
+    return meas_σx(ϕ0)
+end
+Xps = map(1:50*L) do ix
+    ix % 10 == 0 && (@show ix) 
+    return meas_σx(ϕp)
+end
+Xms = map(1:50*L) do ix
+    ix % 10 == 0 && (@show ix) 
+    return meas_σx(ϕm)
 end
 
-bins = findmax(Xs)[1] - findmin(Xs)[1]
-
-fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 400))
+fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 900))
 ax1 = Axis(fig[1, 1], xlabel=L"X", ylabel=L"N")
-xlims!(ax1, (-L, L))
-hist!(ax1, Xs; bins=bins)
+hist!(ax1, X0s; bins=-L:L, label=L"\tau=0")
+axislegend(ax1; position=:rt)
 @show fig
+
+ax2 = Axis(fig[2, 1], xlabel=L"X", ylabel=L"N")
+hist!(ax2, Xps; bins=-L:L, label=L"\tau=0.2")
+axislegend(ax2; position=:rt)
+@show fig
+
+ax3 = Axis(fig[3, 1], xlabel=L"X", ylabel=L"N")
+hist!(ax3, Xms; bins=-L:L, label=L"\tau=-0.2")
+axislegend(ax3; position=:rt)
+@show fig
+
+save("square_ising/data/VUMPS_check_distribution.pdf", fig)
