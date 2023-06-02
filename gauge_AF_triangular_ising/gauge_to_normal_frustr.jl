@@ -79,9 +79,6 @@ end
 normality, 𝕋n1 = f_normality(5)
 normality, 𝕋n_nf = f_normality(Inf)
 
-norm(𝕋n1.opp[1])
-norm(𝕋n_nf.opp[1])
-
 aaa_nf = convert(InfiniteMPS, 𝕋n_nf)
 bbb_nf = convert(InfiniteMPS, 𝕋n1)
 dot(aaa_nf, bbb_nf)
@@ -122,6 +119,7 @@ function optimize_with_τ(τ::Real, maxiter::Int=10000)
     expand_alg = OptimalExpand(truncdim(8))
     optim_alg = VUMPS(tol_galerkin=1e-12, maxiter=maxiter)
     fs = Float64[]
+    ψs = typeof(ψt0)[] 
     for ix in 1:8
         ψt, envt, _ = leading_boundary(ψt0, 𝕋n1, optim_alg)
         ψt0, _ = changebonds(ψt, 𝕋n1, expand_alg, envt)
@@ -129,16 +127,17 @@ function optimize_with_τ(τ::Real, maxiter::Int=10000)
         f1 = log(norm(dot(ψt, 𝕋n1, ψt)))
         @show space(ψt.AL[1]), f1 
         push!(fs, f1)
+        push!(ψs, ψt)
     end
-    return fs, normality
+    return ψs, fs, normality
 end
 
-fsinf, normalityinf = optimize_with_τ(Inf, 10000)
-fs3, normality3 = optimize_with_τ(3, 10000)
-fs2, normality2 = optimize_with_τ(2, 10000)
-fs1, normality1 = optimize_with_τ(1, 10000)
+ψsinf, fsinf, normalityinf = optimize_with_τ(Inf, 10000)
+ψs3, fs3, normality3 = optimize_with_τ(3, 10000)
+ψs2, fs2, normality2 = optimize_with_τ(2, 10000)
+ψs1, fs1, normality1 = optimize_with_τ(1, 10000)
 
-@save "gauge_AF_triangular_ising/data/VUMPS_data.jld2" fsinf fs3 fs2 fs1
+@save "gauge_AF_triangular_ising/data/VUMPS_data.jld2" ψsinf ψs3 ψs2 ψs1 fsinf fs3 fs2 fs1
 
 f_exact = 0.3230659669
 
