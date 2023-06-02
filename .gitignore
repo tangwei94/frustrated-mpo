@@ -2,3 +2,5 @@
 *.pdf
 gauge_AF_triangular_ising/data
 square_ising/data
+triangleAF_finite_size.bak/data
+gauge_random_iMPS/data
