@@ -17,7 +17,7 @@ function genP(τ::Real)
     R = permute(sqrt(S) * R, (1, 2), (3, ))
     @tensor T1[-1 -2; -3 -4] := L[-2; 1 -4] * R[-1 1 ; -3]
     @tensor T2[-1 -2; -3 -4] := R[-1 -2; 1] * L[1; -3 -4]
-    @show norm(T1 - T2)
+    #@show norm(T1 - T2)
     return T1
 end
 

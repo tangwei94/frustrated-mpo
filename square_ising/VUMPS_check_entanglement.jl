@@ -81,20 +81,32 @@ axislegend(ax1; position=:rb)
 @show fig
 save("square_ising/data/EEs-local-gauge.pdf", fig)
 
-τs = -0.1:0.001:0.1
+τs = -1:0.05:1
 EExs = []
+EEzs = []
 for ix in 1:8
     push!(EExs, [RDM_after_gauge(ψs[ix], τ, σx)[2] for τ in τs])
+    push!(EEzs, [RDM_after_gauge(ψs[ix], τ, σz)[2] for τ in τs])
     @show left_virtualspace(ψs[ix], 1)
 end
-@save "square_ising/data/VUMPS_hermitian_betac.jld2" ψs fs EExs τs
+@save "square_ising/data/VUMPS_hermitian_betac.jld2" ψs fs EExs EEzs τs
+@load "square_ising/data/VUMPS_hermitian_betac.jld2" ψs fs EExs EEzs τs
 
-fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 400))
+EExs
+
+fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 600))
 ax1 = Axis(fig[1, 1], xlabel=L"\tau", ylabel=L"S_E")
 for ix in 2:8
     lines!(ax1, τs, abs.(EExs[ix]) .+ 1e-16, label="σˣ, $(left_virtualspace(ψs[ix], 1))")
 end
+ax2 = Axis(fig[2, 1], xlabel=L"\tau", ylabel=L"S_E")
+for ix in 2:8
+    lines!(ax2, τs, abs.(EEzs[ix]) .+ 1e-16, label="σᶻ, $(left_virtualspace(ψs[ix], 1))")
+end
 #liney = lines!(ax1, τs, abs.(EEys) .+ 1e-16, label=L"\sigma^y")
 #linez = lines!(ax1, τs, abs.(EEzs) .+ 1e-16, label=L"\sigma^z")
-axislegend(ax1; position=:rb)
+axislegend(ax1)
+axislegend(ax2)
 @show fig
+
+save("square_ising/data/VUMPS-EE_vs_tau.pdf", fig)
