@@ -23,6 +23,19 @@ end
 
 𝕋0 = mpo_gen(1, T, :inf)
 
+function mpo_ovlp(A1, A2)
+    χ1 = dim(MPSKit._lastspace(A1))
+    χ2 = dim(MPSKit._lastspace(A2))
+
+    function mpo_transf(v)
+        @tensor Tv[-1; -2] := A1[-1 3; 4 1] * conj(A2[-2 3; 4 2]) * v[1; 2]
+        return Tv
+    end
+
+    v0 = TensorMap(rand, ComplexF64, ℂ^χ1, ℂ^χ2)
+    return eigsolve(mpo_transf, v0, 1, :LM)
+end
+
 function f_normality(τ::Real, O::AbstractTensorMap)
     ℙ = genP(τ, O)[2]
     ℙinv = genP(-τ, O)[2]
@@ -30,68 +43,180 @@ function f_normality(τ::Real, O::AbstractTensorMap)
     𝕋1 = ℙ * 𝕋0 * ℙinv
     𝕋1dag = ℙinv * 𝕋0 * ℙ 
 
-    ϕ1 = convert(InfiniteMPS, 𝕋1*𝕋1dag)
-    ϕ2 = convert(InfiniteMPS, 𝕋1dag*𝕋1)
+    a1 = 𝕋1.opp[1]
+    a2 = 𝕋1dag.opp[1]
 
-    return norm(dot(ϕ1, ϕ2)), 𝕋1, 𝕋1dag
+    normality = real(mpo_ovlp(a1, a2)[1][1] * mpo_ovlp(a2, a1)[1][1] / mpo_ovlp(a1, a1)[1][1] / mpo_ovlp(a2, a2)[1][1])
+
+    return normality, 𝕋1, 𝕋1dag
 end
 
-function iTEBD_history(τ::Real, O::AbstractTensorMap,  err::Real)
-    normality1, 𝕋1, 𝕋1dag = f_normality(τ, O)
-    ℙinv2 = genP(-τ*2, σx)[2]
-    ψ1 = InfiniteMPS([ℂ^2], [ℂ^1])
+Ns = map(-1.0:0.1:0.1) do τ
+    _, 𝕋1, _ = f_normality(τ, σy)
+    norm(𝕋1.opp[1])
+end
 
-    ψs, fs, vars = typeof(ψ1)[], Float64[], Float64[]
+function iTEBD_history(τ::Real, O::AbstractTensorMap, err::Real)
+    _, 𝕋1, 𝕋1dag = f_normality(τ, O)
+    ψR = InfiniteMPS([ℂ^2], [ℂ^1])
+    ψL = InfiniteMPS([ℂ^2], [ℂ^1])
+
+    ψRs, ψLs, fs, vars = typeof(ψR)[], typeof(ψL)[], Float64[], Float64[]
+    alg = SvdCut(truncerr(err))
 
     for ix in 1:500
-        ψ1 = 𝕋1 * ψ1
-        a = SvdCut(truncerr(err))
-        ψ1 = changebonds(ψ1, a) 
-        ψ2 = ℙinv2 * ψ1 
-        f = real(log(dot(ψ2, 𝕋1, ψ1) / dot(ψ2, ψ1)))
-        var = log(norm(dot(ψ1, 𝕋1dag*𝕋1, ψ1) / dot(ψ1, 𝕋1dag, ψ1) / dot(ψ1, 𝕋1, ψ1)))
-        push!(ψs, ψ1)
+        ψR = changebonds(𝕋1 * ψR, alg)
+        ψL = changebonds(𝕋1dag * ψL, alg)
+        
+        f = real(log(dot(ψL, 𝕋1, ψR) / dot(ψL, ψR)))
+        varR = log(norm(dot(ψR, 𝕋1dag*𝕋1, ψR) / dot(ψR, 𝕋1dag, ψR) / dot(ψR, 𝕋1, ψR)))
+        push!(ψRs, ψR)
+        push!(ψLs, ψL)
         push!(fs, f)
-        push!(vars, var)
-        printstyled("$(left_virtualspace(ψ1, 1)), $(ix), $(var) \n"; color=:red)
+        push!(vars, varR)
+        printstyled("$(left_virtualspace(ψR, 1)), $(ix), $(varR) \n"; color=:red)
     end
-    return ψs, fs, vars
+    return ψRs, ψLs, fs, vars
 end
 
-ψ1s, f1s, var1s = iTEBD_history(0.1, σx, 1e-6)
-@save "square_ising/data/badly_gauged-ITEBD-histories_1.jld2" ψ1s f1s var1s  
-ψ5s, f5s, var5s = iTEBD_history(0.5, σx, 1e-6)
-@save "square_ising/data/badly_gauged-ITEBD-histories_5.jld2" ψ5s f5s var5s  
-ψ10s, f10s, var10s = iTEBD_history(1.0, σx, 1e-6)
-@save "square_ising/data/badly_gauged-ITEBD-histories_10.jld2" ψ10s f10s var10s  
-ψ15s, f15s, var15s = iTEBD_history(1.5, σx, 1e-6)
-@save "square_ising/data/badly_gauged-ITEBD-histories_15.jld2" ψ15s f15s var15s  
-ψ20s, f20s, var20s = iTEBD_history(2.0, σx, 1e-6)
-@save "square_ising/data/badly_gauged-ITEBD-histories_20.jld2" ψ20s f20s var20s  
+iTEBD_results_01 = iTEBD_history(0.1, σx, 1e-6);
+@save "square_ising/data/badly_gauged-ITEBD-histories_01.jld2" iTEBD_results=iTEBD_results_01
+f01s = iTEBD_results_01[3];
 
-ψ1s, f1s, var1s = iTEBD_history(0.1, σx, 1e-8)
-@save "square_ising/data/badly_gauged-ITEBD_lv2-histories_1.jld2" ψ1s f1s var1s  
-ψ5s, f5s, var5s = iTEBD_history(0.5, σx, 1e-8)
-@save "square_ising/data/badly_gauged-ITEBD_lv2-histories_5.jld2" ψ5s f5s var5s  
-ψ10s, f10s, var10s = iTEBD_history(1.0, σx, 1e-8)
-@save "square_ising/data/badly_gauged-ITEBD_lv2-histories_10.jld2" ψ10s f10s var10s  
-ψ15s, f15s, var15s = iTEBD_history(1.5, σx, 1e-8)
-@save "square_ising/data/badly_gauged-ITEBD_lv2-histories_15.jld2" ψ15s f15s var15s  
-ψ20s, f20s, var20s = iTEBD_history(2.0, σx, 1e-8)
-@save "square_ising/data/badly_gauged-ITEBD_lv2-histories_20.jld2" ψ20s f20s var20s 
+iTEBD_results_05 = iTEBD_history(0.5, σx, 1e-6);
+@save "square_ising/data/badly_gauged-ITEBD-histories_05.jld2" iTEBD_results=iTEBD_results_05 
+f05s = iTEBD_results_05[3]; 
 
-@load "square_ising/data/badly_gauged-ITEBD-histories_1.jld2" ψ1s f1s var1s  
-@load "square_ising/data/badly_gauged-ITEBD-histories_5.jld2" ψ5s f5s var5s  
-@load "square_ising/data/badly_gauged-ITEBD-histories_10.jld2" ψ10s f10s var10s  
-@load "square_ising/data/badly_gauged-ITEBD-histories_15.jld2" ψ15s f15s var15s  
-@load "square_ising/data/badly_gauged-ITEBD-histories_20.jld2" ψ20s f20s var20s
+iTEBD_results_10 = iTEBD_history(1.0, σx, 1e-6);
+@save "square_ising/data/badly_gauged-ITEBD-histories_10.jld2" iTEBD_results=iTEBD_results_10 
+f10s = iTEBD_results_10[3]; 
+
+iTEBD_results_15 = iTEBD_history(1.5, σx, 1e-6);
+@save "square_ising/data/badly_gauged-ITEBD-histories_15.jld2" iTEBD_results=iTEBD_results_15 
+f15s = iTEBD_results_15[3]; 
+
+iTEBD_results_20 = iTEBD_history(2.0, σx, 1e-6);
+@save "square_ising/data/badly_gauged-ITEBD-histories_20.jld2" iTEBD_results=iTEBD_results_20 
+f20s = iTEBD_results_20[3]; 
 
 fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 600))
 ax1 = Axis(fig[1, 1], xlabel=L"\text{steps}", ylabel=L"\text{error in }f", yscale=log10)
-lines!(ax1, 1:500, abs.(f1s .- f_exact) ./ f_exact, label=L"τ=0.1")
-lines!(ax1, 1:500, abs.(f5s .- f_exact) ./ f_exact, label=L"τ=0.5")
+lines!(ax1, 1:500, abs.(f01s .- f_exact) ./ f_exact, label=L"τ=0.1")
+lines!(ax1, 1:500, abs.(f05s .- f_exact) ./ f_exact, label=L"τ=0.5")
 lines!(ax1, 1:500, abs.(f10s .- f_exact) ./ f_exact, label=L"τ=1.0")
 lines!(ax1, 1:500, abs.(f15s .- f_exact) ./ f_exact, label=L"τ=1.5")
 lines!(ax1, 1:500, abs.(f20s .- f_exact) ./ f_exact, label=L"τ=2.0")
 axislegend(ax1)
 @show fig 
+
+ax2 = Axis(fig[2, 1], xlabel=L"\text{steps}", ylabel=L"\text{bond dimension}") 
+get_bondD(res) = map(res[1]) do ψR 
+    return dim(left_virtualspace(ψR, 1))
+end
+
+χs_01 = get_bondD(iTEBD_results_01);
+χs_05 = get_bondD(iTEBD_results_05);
+χs_10 = get_bondD(iTEBD_results_10);
+χs_15 = get_bondD(iTEBD_results_15);
+χs_20 = get_bondD(iTEBD_results_20);
+
+lines!(ax2, 1:500, χs_01, label=L"τ=0.1")
+lines!(ax2, 1:500, χs_05, label=L"τ=0.5")
+lines!(ax2, 1:500, χs_10, label=L"τ=1.0")
+lines!(ax2, 1:500, χs_15, label=L"τ=1.5")
+lines!(ax2, 1:500, χs_20, label=L"τ=2.0")
+
+axislegend(ax2)
+
+@show fig
+
+ax3 = Axis(fig[3, 1], xlabel=L"\text{steps}", ylabel=L"\text{variance}", yscale=log10) 
+get_var(res) = res[4]
+
+res_01 = get_var(iTEBD_results_01);
+res_05 = get_var(iTEBD_results_05);
+res_10 = get_var(iTEBD_results_10);
+res_15 = get_var(iTEBD_results_15);
+res_20 = get_var(iTEBD_results_20);
+
+lines!(ax3, 1:500, abs.(res_01), label=L"τ=0.1")
+lines!(ax3, 1:500, abs.(res_05), label=L"τ=0.5")
+lines!(ax3, 1:500, abs.(res_10), label=L"τ=1.0")
+lines!(ax3, 1:500, abs.(res_15), label=L"τ=1.5")
+lines!(ax3, 1:500, abs.(res_20), label=L"τ=2.0")
+
+axislegend(ax3)
+
+@show fig
+save("square_ising/data/badly_gauged-iTEBD-histories.pdf", fig)
+
+iTEBD_results_01 = iTEBD_history(0.1, σz, 1e-6);
+@save "square_ising/data/badly_gauged-ITEBD-histories_z_01.jld2" iTEBD_results=iTEBD_results_01
+f01s = iTEBD_results_01[3];
+
+iTEBD_results_05 = iTEBD_history(0.5, σz, 1e-6);
+@save "square_ising/data/badly_gauged-ITEBD-histories_z_05.jld2" iTEBD_results=iTEBD_results_05 
+f05s = iTEBD_results_05[3]; 
+
+iTEBD_results_10 = iTEBD_history(1.0, σz, 1e-6);
+@save "square_ising/data/badly_gauged-ITEBD-histories_z_10.jld2" iTEBD_results=iTEBD_results_10 
+f10s = iTEBD_results_10[3]; 
+
+iTEBD_results_15 = iTEBD_history(1.5, σz, 1e-6);
+@save "square_ising/data/badly_gauged-ITEBD-histories_z_15.jld2" iTEBD_results=iTEBD_results_15 
+f15s = iTEBD_results_15[3]; 
+
+iTEBD_results_20 = iTEBD_history(2.0, σz, 1e-6);
+@save "square_ising/data/badly_gauged-ITEBD-histories_z_20.jld2" iTEBD_results=iTEBD_results_20 
+f20s = iTEBD_results_20[3]; 
+
+fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 600))
+ax1 = Axis(fig[1, 1], xlabel=L"\text{steps}", ylabel=L"\text{error in }f", yscale=log10)
+lines!(ax1, 1:500, abs.(f01s .- f_exact) ./ f_exact, label=L"τ=0.1")
+lines!(ax1, 1:500, abs.(f05s .- f_exact) ./ f_exact, label=L"τ=0.5")
+lines!(ax1, 1:500, abs.(f10s .- f_exact) ./ f_exact, label=L"τ=1.0")
+lines!(ax1, 1:500, abs.(f15s .- f_exact) ./ f_exact, label=L"τ=1.5")
+lines!(ax1, 1:500, abs.(f20s .- f_exact) ./ f_exact, label=L"τ=2.0")
+axislegend(ax1)
+@show fig 
+
+ax2 = Axis(fig[2, 1], xlabel=L"\text{steps}", ylabel=L"\text{bond dimension}") 
+get_bondD(res) = map(res[1]) do ψR 
+    return dim(left_virtualspace(ψR, 1))
+end
+
+χs_01 = get_bondD(iTEBD_results_01);
+χs_05 = get_bondD(iTEBD_results_05);
+χs_10 = get_bondD(iTEBD_results_10);
+χs_15 = get_bondD(iTEBD_results_15);
+χs_20 = get_bondD(iTEBD_results_20);
+
+lines!(ax2, 1:500, χs_01, label=L"τ=0.1")
+lines!(ax2, 1:500, χs_05, label=L"τ=0.5")
+lines!(ax2, 1:500, χs_10, label=L"τ=1.0")
+lines!(ax2, 1:500, χs_15, label=L"τ=1.5")
+lines!(ax2, 1:500, χs_20, label=L"τ=2.0")
+
+axislegend(ax2)
+
+@show fig
+
+ax3 = Axis(fig[3, 1], xlabel=L"\text{steps}", ylabel=L"\text{variance}", yscale=log10) 
+get_var(res) = res[4]
+
+res_01 = get_var(iTEBD_results_01);
+res_05 = get_var(iTEBD_results_05);
+res_10 = get_var(iTEBD_results_10);
+res_15 = get_var(iTEBD_results_15);
+res_20 = get_var(iTEBD_results_20);
+
+lines!(ax3, 1:500, abs.(res_01), label=L"τ=0.1")
+lines!(ax3, 1:500, abs.(res_05), label=L"τ=0.5")
+lines!(ax3, 1:500, abs.(res_10), label=L"τ=1.0")
+lines!(ax3, 1:500, abs.(res_15), label=L"τ=1.5")
+lines!(ax3, 1:500, abs.(res_20), label=L"τ=2.0")
+
+axislegend(ax3)
+
+@show fig
+save("square_ising/data/badly_gauged-iTEBD-histories_z.pdf", fig)
