@@ -549,3 +549,81 @@ function ChainRulesCore.rrule(::typeof(TensorKit.exp), K::TensorMap)
     end 
     return expK, exp_pushback
 end
+
+function get_transferL(AL1, AL2)
+    function transferL(v)
+        @tensor vo[-1; -2] := v[1; 2] * conj(AL2[1 3; -1]) * AL1[2 3; -2]
+    end
+    return transferL
+end
+function get_transferR(AR1, AR2)
+    function transferR(v)
+        @tensor vo[-1; -2] := v[1; 2] * conj(AR2[-2 3; 2]) * AR1[-1 3; 1]
+    end
+    return transferR
+end
+function importance_scattering_L(ψl, ψr)
+    AL1, AL2 = ψl.AL[1], ψr.AL[1]
+    C1, C2 = ψl.CR[1], ψr.CR[2]
+    return importance_scattering_L(AL1, AL2, C1, C2)
+end 
+function importance_scattering_L(AL1, AL2, C1, C2)
+    U1, S1, V1 = tsvd(C1)
+    U2, S2, V2 = tsvd(C2)
+    @tensor AL1_n[-1 -2 ; -3] := U1'[-1; 1] * AL1[1 -2; 2] * U1[2; -3]
+    @tensor AL2_n[-1 -2 ; -3] := U2'[-1; 1] * AL2[1 -2; 2] * U2[2; -3]
+
+    transferL = get_transferL(AL1_n, AL2_n)
+
+    sp = domain(AL1_n)
+    v0 = TensorMap(rand, ComplexF64, sp, sp)
+
+    _, ρl, _ = eigsolve(transferL, v0, 1, :LM)
+    ρl = ρl[1]
+    ρl /= maximum(norm.(ρl.data))
+    return ρl#, sqrt(S2) * ρl * sqrt(S1)
+end
+function rhoLR(ψ1, ψ2)
+    sp = domain(ψ1.AL[1])
+    v0 = TensorMap(rand, ComplexF64, sp, sp)
+
+    C1, C2 = ψ1.CR[1], ψ2.CR[1]
+    U1, S1, V1 = tsvd(C1)
+    U2, S2, V2 = tsvd(C2)
+    @tensor AL1[-1 -2 ; -3] := U1'[-1; 1] * ψ1.AL[1][1 -2; 2] * U1[2; -3]
+    @tensor AL2[-1 -2 ; -3] := U2'[-1; 1] * ψ2.AL[1][1 -2; 2] * U2[2; -3]
+    @tensor AR1[-1 -2 ; -3] := V1[-1; 1] * ψ1.AR[1][1 -2; 2] * V1'[2; -3]
+    @tensor AR2[-1 -2 ; -3] := V2[-1; 1] * ψ2.AR[1][1 -2; 2] * V2'[2; -3]
+    
+    transferL = get_transferL(AL1, AL2)
+    transferR = get_transferR(AR1, AR2)
+
+    _, ρl, _ = eigsolve(transferL, v0, 1, :LM)
+    _, ρr, _ = eigsolve(transferR, v0, 1, :LM)
+    ρl = ρl[1]
+    ρr = ρr[1]
+    ρlr = sqrt(S1) * ρr * S2' * ρl * sqrt(S1) 
+    return ρlr / tr(ρlr)
+end
+
+function mpo_ovlp(A1, A2)
+    χ1 = dim(MPSKit._lastspace(A1))
+    χ2 = dim(MPSKit._lastspace(A2))
+
+    function mpo_transf(v)
+        @tensor Tv[-1; -2] := A1[-1 3; 4 1] * conj(A2[-2 3; 4 2]) * v[1; 2]
+        return Tv
+    end
+
+    v0 = TensorMap(rand, ComplexF64, ℂ^χ1, ℂ^χ2)
+    return eigsolve(mpo_transf, v0, 1, :LM)
+end
+
+function mpo_ovlp1(𝕋1, 𝕋1dag)
+    a1 = 𝕋1.opp[1]
+    a2 = 𝕋1dag.opp[1]
+
+    normality = mpo_ovlp(a1, a2)[1][1] * mpo_ovlp(a2, a1)[1][1] / mpo_ovlp(a1, a1)[1][1] / mpo_ovlp(a2, a2)[1][1]
+
+    return normality
+end
