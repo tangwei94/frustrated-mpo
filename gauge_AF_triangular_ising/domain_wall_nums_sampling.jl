@@ -10,8 +10,9 @@ Tdag = tensor_triangular_AF_ising_T()
 𝕋dag = mpo_gen(1, Tdag, :inf)
 
 @load "gauge_AF_triangular_ising/data/VUMPS_data.jld2" ψs3 ψs2 ψs1 
+@load "gauge_AF_triangular_ising/data/vomps_chi8_results.jld2" ψ1s_8 ψ2s_8 fs_8 vars1_8 vars2_8 
 
-A = ψs1[2].AL[1]
+A = ψ2s_8[end].AL[1]#ψs1[2].AL[1]
 L = 18
 ψfin = circular_mps(A, L);
 
