@@ -1,3 +1,7 @@
+# check distribution of σx and σz under periodic boundary condition
+# output: ("square_ising/data/VUMPS_check_distribution_sigmax.pdf", fig)
+# output: ("square_ising/data/VUMPS_check_distribution_sigmaz.pdf", fig)
+
 using LinearAlgebra, TensorKit, MPSKit, MPSKitModels, KrylovKit
 using ChainRules, ChainRulesCore, TensorKitAD, Zygote, OptimKit
 using JLD2
@@ -10,8 +14,8 @@ include("../utils.jl");
 
 @load "square_ising/data/VUMPS_hermitian_betac.jld2" ψs fs
 
-function circular_mps(ψ, L, τ, ϵ=1e-8)
-    G = exp(-τ * σx)
+function circular_mps(ψ, L, τ, O=σx, ϵ=1e-8)
+    G = exp(-τ * O)
     @tensor A[-1 -2 ; -3] := ψ.AL[1][-1 1; -3] * G[-2 ; 1]
     return circular_mps(A, L, ϵ)
 end
@@ -61,4 +65,51 @@ hist!(ax3, Xms; bins=-L:L, label=L"\tau=-0.2")
 axislegend(ax3; position=:rt)
 @show fig
 
-save("square_ising/data/VUMPS_check_distribution.pdf", fig)
+save("square_ising/data/VUMPS_check_distribution_sigmax.pdf", fig)
+
+
+### measure sigma z
+
+ϕ0 = circular_mps(ψ, L, σz, 0);
+ϕp = circular_mps(ψ, L, σz, 0.1); 
+ϕm = circular_mps(ψ, L, σz, -0.1); 
+
+Uy = DenseMPO(fill(add_util_leg(exp(-im*pi*σy/4)), L))
+function meas_σz(ψlp)
+
+    σzs = perfect_sampling(ψlp)
+
+    return sum(2 .* σzs .- 3)
+
+end
+
+Z0s = map(1:50*L) do ix
+    ix % 10 == 0 && (@show ix) 
+    return meas_σz(ϕ0)
+end
+Zps = map(1:50*L) do ix
+    ix % 10 == 0 && (@show ix) 
+    return meas_σz(ϕp)
+end
+Zms = map(1:50*L) do ix
+    ix % 10 == 0 && (@show ix) 
+    return meas_σz(ϕm)
+end
+
+fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 900))
+ax1 = Axis(fig[1, 1], xlabel=L"Z", ylabel=L"N")
+hist!(ax1, Z0s; bins=-L:L, label=L"\tau=0")
+axislegend(ax1; position=:rt)
+@show fig
+
+ax2 = Axis(fig[2, 1], xlabel=L"Z", ylabel=L"N")
+hist!(ax2, Zps; bins=-L:L, label=L"\tau=0.1")
+axislegend(ax2; position=:rt)
+@show fig
+
+ax3 = Axis(fig[3, 1], xlabel=L"Z", ylabel=L"N")
+hist!(ax3, Zms; bins=-L:L, label=L"\tau=-0.1")
+axislegend(ax3; position=:rt)
+@show fig
+
+save("square_ising/data/VUMPS_check_distribution_sigmaz.pdf", fig)
