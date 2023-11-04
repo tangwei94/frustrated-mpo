@@ -1,4 +1,6 @@
 # calculate the entanglement entropy of the eigenstate after the gauge transformation
+# using the VUMPS result ψ0 to do the computation.
+# output figures in the manuscript.
 
 using LinearAlgebra, TensorKit, MPSKit, MPSKitModels, KrylovKit
 using ChainRules, ChainRulesCore, TensorKitAD, Zygote, OptimKit
@@ -155,84 +157,6 @@ Colorbar(fig[:, end+1], hm)
 save("square_ising/data/fig-M-matrix.pdf", fig)
 
 @show fig
-
-##### the following should be put in the vomps analysis.
-
-@load "square_ising/data/badly_gauged-VOMPS-histories_z_01.jld2" VOMPS_results
-ψRs, ψLs, fs, vars = VOMPS_results
-ρ_LR = RDM(ψRs[1000].AL[1], ψLs[1000].AL[1]);
-ρ_RR = RDM(ψRs[1000].AL[1], ψRs[1000].AL[1]);
-ρ_LL = RDM(ψLs[1000].AL[1], ψLs[1000].AL[1])
-ρ_0 = RDM(ψs[2].AL[1], ψs[2].AL[1])
-
-ESR = eigen(ρ_RR)[1].data |> diag;
-ESL = eigen(ρ_LL)[1].data |> diag;
-ESLR = eigen(ρ_LR)[1].data |> diag;
-ES0 = eigen(ρ_0)[1].data |> diag;
-
-fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 400))
-ax1 = Axis(fig[1, 1], xlabel=L"\ln \chi", ylabel=L"S", yscale=log10)
-scatter!(ax1, length(ESR):-1:1, abs.(ESR) .+ 1e-14, marker=:circle, markersize=5, label=L"X, R")
-scatter!(ax1, length(ESL):-1:1, abs.(ESL) .+ 1e-14, marker=:circle, markersize=5, label=L"X, L")
-scatter!(ax1, length(ESLR):-1:1, abs.(ESLR) .+ 1e-14, marker=:circle, markersize=5, label=L"X, LR")
-lines!(ax1, length(ES0):-1:1, abs.(ES0) .+ 1e-14, marker=:circle, markersize=5, label=L"X, 0")
-
-axislegend(ax1; position=:rt)
-@show fig
-
-for ix in 1:8
-    RDM_R, RDM_L, RDM_LR = RDMs_after_gauge(ψs[ix], 0.5, σx)
-    EE_R, EE_L, EE_LR = get_EE(RDM_R), get_EE(RDM_L), get_EE(RDM_LR)
-    @show EE_R, EE_L, EE_LR 
-end
-
-
-
-
-
-for ix in 1:8
-    @show RDM_after_gauge(ψs[ix], 0, σz)[2] - EEs[ix] |> norm
-end
-
-EE1s = [RDM_after_gauge(ψ, 0.2, σz)[2] for ψ in ψs]
-
-fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 400))
-ax1 = Axis(fig[1, 1], xlabel=L"\ln \chi", ylabel=L"S")
-lines1 = lines!(ax1, log.(χs), abs.(EEs) .+ 1e-16, marker=:circle, markersize=5, label=L"\tau=0")
-lines1 = lines!(ax1, log.(χs), abs.(EE1s) .+ 1e-16, marker=:circle, markersize=5, label=L"\tau=0.5")
-axislegend(ax1; position=:rb)
-@show fig
-save("square_ising/data/EEs-local-gauge.pdf", fig)
-
-τs = -1:0.05:1
-EExs = []
-EEzs = []
-for ix in 1:8
-    push!(EExs, [RDM_after_gauge(ψs[ix], τ, σx)[2] for τ in τs])
-    push!(EEzs, [RDM_after_gauge(ψs[ix], τ, σz)[2] for τ in τs])
-    @show left_virtualspace(ψs[ix], 1)
-end
-@save "square_ising/data/VUMPS_hermitian_betac.jld2" ψs fs EExs EEzs τs
-@load "square_ising/data/VUMPS_hermitian_betac.jld2" ψs fs EExs EEzs τs
-
-EExs
-
-fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 600))
-ax1 = Axis(fig[1, 1], xlabel=L"\tau", ylabel=L"S_E")
-for ix in 2:8
-    lines!(ax1, τs, abs.(EExs[ix]) .+ 1e-16, label="σˣ, $(left_virtualspace(ψs[ix], 1))")
-end
-ax2 = Axis(fig[2, 1], xlabel=L"\tau", ylabel=L"S_E")
-for ix in 2:8
-    lines!(ax2, τs, abs.(EEzs[ix]) .+ 1e-16, label="σᶻ, $(left_virtualspace(ψs[ix], 1))")
-end
-#liney = lines!(ax1, τs, abs.(EEys) .+ 1e-16, label=L"\sigma^y")
-#linez = lines!(ax1, τs, abs.(EEzs) .+ 1e-16, label=L"\sigma^z")
-axislegend(ax1)
-axislegend(ax2)
-@show fig
-
-save("square_ising/data/VUMPS-EE_vs_tau.pdf", fig)
 
 # expectation value. X, and Z
 for ix in 1:8
