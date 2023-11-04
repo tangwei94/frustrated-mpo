@@ -157,17 +157,3 @@ Colorbar(fig[:, end+1], hm)
 save("square_ising/data/fig-M-matrix.pdf", fig)
 
 @show fig
-
-# expectation value. X, and Z
-for ix in 1:8
-    @show left_virtualspace(ψs[ix], 1), expectation_value(ψs[ix], σx), expectation_value(ψs[ix], σz)
-end
-expZ = add_util_leg(exp(-0.1 * σz))
-ϕs = [DenseMPO([expZ]) * ψs[ix] for ix in 1:8];
-exppZ = add_util_leg(exp(0.1 * σz))
-ϕps = [DenseMPO([exppZ]) * ψs[ix] for ix in 1:8];
-
-for ix in 1:8
-    @show expectation_value(ϕs[ix], σz)
-    @show expectation_value(ϕps[ix], σz)
-end
