@@ -8,7 +8,7 @@ include("../utils.jl");
 
 βc = asinh(1) / 2
 k = 1 / (sinh(2*βc))^2
-f_exact = log(2) / 2 + (1/2/pi) * quadgk(θ-> log(cosh(2*βc)*cosh(2*βc) + (1/k)*sqrt(1+k^2-2*k*cos(2*θ))), 0, pi)[1]
+f_exact = log(2) / 2 + (1/2/pi) * quadgk(θ-> log(cosh(2*βc)*cosh(2*βc) + (1/k)*sqrt(1+k^2-2*k*cos(2*θ))), 0, pi, rtol = 1e-12)[1]
 
 T = tensor_square_ising(βc)
 
@@ -17,19 +17,8 @@ T = tensor_square_ising(βc)
 σz = TensorMap(ComplexF64[1 0; 0 -1], ℂ^2, ℂ^2)
 function genP(τ::Real, O::AbstractTensorMap)
     P = add_util_leg(exp(-τ*O))
-    ℙ = mpo_gen(1, P, :inf)
+    ℙ = DenseMPO([P])
     return P, ℙ
-end
-
-M = σz ⊗ σz
-function genPmpo(τ::Real)
-    L, S, R = tsvd(exp(-τ * M), (1, 3), (2, 4), trunc=truncerr(1e-10))
-    L = permute(L * sqrt(S), (1, ), (2, 3))
-    R = permute(sqrt(S) * R, (1, 2), (3, ))
-    @tensor T1[-1 -2; -3 -4] := L[-2; 1 -4] * R[-1 1 ; -3]
-    @tensor T2[-1 -2; -3 -4] := R[-1 -2; 1] * L[1; -3 -4]
-    #@show norm(T1 - T2)
-    return DenseMPO([T1])
 end
 
 𝕋0 = mpo_gen(1, T, :inf)
@@ -50,21 +39,6 @@ end
 function f_normality(τ::Real, O::AbstractTensorMap)
     ℙ = genP(τ, O)[2]
     ℙinv = genP(-τ, O)[2]
-
-    𝕋1 = ℙ * 𝕋0 * ℙinv
-    𝕋1dag = ℙinv * 𝕋0 * ℙ 
-
-    a1 = 𝕋1.opp[1]
-    a2 = 𝕋1dag.opp[1]
-
-    normality = real(mpo_ovlp(a1, a2)[1][1] * mpo_ovlp(a2, a1)[1][1] / mpo_ovlp(a1, a1)[1][1] / mpo_ovlp(a2, a2)[1][1])
-
-    return normality, 𝕋1, 𝕋1dag
-end
-
-function mpof_normality(τ::Real)
-    ℙ = genPmpo(τ)
-    ℙinv = genPmpo(-τ)
 
     𝕋1 = ℙ * 𝕋0 * ℙinv
     𝕋1dag = ℙinv * 𝕋0 * ℙ 
@@ -103,132 +77,177 @@ function VOMPS_history(τ::Real, O::AbstractTensorMap)
     return ψRs, ψLs, fs, vars
 end
 
-function VOMPS_history(𝕋1::DenseMPO, 𝕋1dag::DenseMPO)
-    optim_alg1 = VUMPS(tol_galerkin=1e-9, maxiter=100) 
-    ψR = InfiniteMPS([ℂ^2], [ℂ^1])
-    ψL = InfiniteMPS([ℂ^2], [ℂ^1])
+indices = ["000", "025", "050", "075", "100", "125", "150", "175"];
+τs = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75]
+χs = [2, 4, 8, 16, 32, 64]
 
-    ψRs, ψLs, fs, vars = typeof(ψR)[], typeof(ψL)[], Float64[], Float64[]
+index = "000"
+VOMPS_results = VOMPS_history(0, σz);
+@save "square_ising/data/badly_gauged-VOMPS-histories_z_$(index).jld2" VOMPS_results 
+@save "square_ising/data/badly_gauged-VOMPS-histories_$(index).jld2" VOMPS_results 
 
-    for _ in 1:2
-        ψR = 𝕋1 * ψR
-        ψL = 𝕋1dag * ψL
-        for ix in 1:250
-            ψR, _ = approximate(ψR, (𝕋1, ψR), optim_alg1)
-            ψL, _ = approximate(ψL, (𝕋1dag, ψL), optim_alg1)
-            f = real(log(dot(ψL, 𝕋1, ψR) / dot(ψL, ψR)))
-            var = log(norm(dot(ψR, 𝕋1dag*𝕋1, ψR) / dot(ψR, 𝕋1dag, ψR) / dot(ψR, 𝕋1, ψR)))
-            push!(ψRs, ψR)
-            push!(ψLs, ψL)
-            push!(fs, f)
-            push!(vars, var)
-            printstyled("$(left_virtualspace(ψR, 1)), $(ix), $(var) \n"; color=:red)
-        end
-    end
-    return ψRs, ψLs, fs, vars
+for (index, τ) in zip(indices[1:end], τs[1:end]) 
+    VOMPS_results = VOMPS_history(τ, σx);
+    @save "square_ising/data/badly_gauged-VOMPS-histories_$(index).jld2" VOMPS_results 
 end
 
+VOMPS_results_vec = map(indices) do index
+    @load "square_ising/data/badly_gauged-VOMPS-histories_$(index).jld2" VOMPS_results
+    return VOMPS_results
+end; 
 
-VOMPS_results_01 = VOMPS_history(0.1, σx);
-@save "square_ising/data/badly_gauged-VOMPS-histories_01.jld2" VOMPS_results=VOMPS_results_01 
-f01s = VOMPS_results_01[3];
+ferrs = map(zip(VOMPS_results_vec, τs)) do item 
+    VOMPS_results, τ = item 
+    
+    ψ = VOMPS_results[1][end]
+    ℙ = genP(τ, σx)[2]
+    ℙinv = genP(-τ, σx)[2]
 
-VOMPS_results_05 = VOMPS_history(0.5, σx);
-@save "square_ising/data/badly_gauged-VOMPS-histories_05.jld2" VOMPS_results=VOMPS_results_05 
-f05s = VOMPS_results_05[3];
+    ψ1 = ℙinv * ψ
+    f = real(log(dot(ψ1, 𝕋0, ψ1) / dot(ψ1, ψ1)))
+    return abs.(f .- f_exact) / f_exact
+end
+vars = map(VOMPS_results_vec) do VOMPS_results 
+    VOMPS_results[4][end]
+end
+iTEBD_results_vec = map(indices) do index
+    @load "square_ising/data/badly_gauged-ITEBD-histories_$(index).jld2" iTEBD_results
+    return iTEBD_results
+end
+ferrs_iTEBD = map(zip(iTEBD_results_vec, τs)) do item 
+    iTEBD_results, τ = item 
+    
+    ψ = iTEBD_results[1][end]
+    ℙ = genP(τ, σx)[2]
+    ℙinv = genP(-τ, σx)[2]
 
-VOMPS_results_10 = VOMPS_history(1.0, σx);
-@save "square_ising/data/badly_gauged-VOMPS-histories_10.jld2" VOMPS_results=VOMPS_results_10 
-f10s = VOMPS_results_10[3];
+    ψ1 = ℙinv * ψ
+    f = real(log(dot(ψ1, 𝕋0, ψ1) / dot(ψ1, ψ1)))
+    return abs.(f .- f_exact) / f_exact
+end
+vars_iTEBD = map(iTEBD_results_vec) do iTEBD_results 
+    iTEBD_results[4][end]
+end
 
-VOMPS_results_15 = VOMPS_history(1.5, σx);
-@save "square_ising/data/badly_gauged-VOMPS-histories_15.jld2" VOMPS_results=VOMPS_results_15 
-f15s = VOMPS_results_15[3];
-
-VOMPS_results_20 = VOMPS_history(2.0, σx);
-@save "square_ising/data/badly_gauged-VOMPS-histories_20.jld2" VOMPS_results=VOMPS_results_20 
-f20s = VOMPS_results_20[3];
-
-VOMPS_results_30 = VOMPS_history(3.0, σx);
-@save "square_ising/data/badly_gauged-VOMPS-histories_30.jld2" VOMPS_results=VOMPS_results_30 
-f30s = VOMPS_results_30[3];
-
-fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 600))
-ax1 = Axis(fig[1, 1], xlabel=L"\text{steps}", ylabel=L"\text{error in }f", yscale=log10)
-lines!(ax1, 1:1500, abs.(f01s .- f_exact) ./ f_exact, label=L"τ=0.1")
-lines!(ax1, 1:1500, abs.(f05s .- f_exact) ./ f_exact, label=L"τ=0.5")
-lines!(ax1, 1:1500, abs.(f10s .- f_exact) ./ f_exact, label=L"τ=1.0")
-lines!(ax1, 1:1500, abs.(f15s .- f_exact) ./ f_exact, label=L"τ=1.5")
-lines!(ax1, 1:1500, abs.(f20s .- f_exact) ./ f_exact, label=L"τ=2.0")
-lines!(ax1, 1:1500, abs.(f30s .- f_exact) ./ f_exact, label=L"τ=3.0")
-axislegend(ax1)
-@show fig 
-
-get_results(res) = res[3][250:250:end]
-χs = 2 .^ (1:6)
-f_res01s = get_results(VOMPS_results_01)
-f_res05s = get_results(VOMPS_results_05)
-f_res10s = get_results(VOMPS_results_10)
-f_res15s = get_results(VOMPS_results_15)
-f_res20s = get_results(VOMPS_results_20)
-
-ax2 = Axis(fig[2, 1], xlabel=L"χ", ylabel=L"\text{error in }f", yscale=log10)
-lines!(ax2, χs, abs.(f_res01s .- f_exact) ./ f_exact, label=L"τ=0.1")
-lines!(ax2, χs, abs.(f_res05s .- f_exact) ./ f_exact, label=L"τ=0.5")
-lines!(ax2, χs, abs.(f_res10s .- f_exact) ./ f_exact, label=L"τ=1.0")
-lines!(ax2, χs, abs.(f_res15s .- f_exact) ./ f_exact, label=L"τ=1.5")
-lines!(ax2, χs, abs.(f_res20s .- f_exact) ./ f_exact, label=L"τ=2.0")
-axislegend(ax2)
+fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 300))
+ax1 = Axis(fig[1, 1], xlabel=L"\tau", ylabel=L"\text{error in }f", yscale=log10)
+scatter!(ax1, τs, ferrs_iTEBD, marker=:circle, markersize=10, label=L"\text{iTEBD}")
+lines!(ax1, τs, ferrs_iTEBD, linestyle=:dash, label=L"\text{iTEBD}")
+scatter!(ax1, τs, ferrs, marker=:circle, markersize=10, label=L"\text{VOMPS}")
+lines!(ax1, τs, ferrs, linestyle=:dash, label=L"\text{VOMPS}")
+axislegend(ax1, position=:lt, merge=true)
+ax2 = Axis(fig[1, 2], xlabel=L"\tau", ylabel=L"\text{variance}", yscale=log10)
+scatter!(τs, norm.(vars_iTEBD), marker=:circle, markersize=10, label=L"\text{iTEBD}")
+lines!(τs, norm.(vars_iTEBD), linestyle=:dash, label=L"\text{iTEBD}")
+scatter!(τs, norm.(vars), marker=:circle, markersize=10, label=L"\text{VOMPS}")
+lines!(τs, norm.(vars), linestyle=:dash, label=L"\text{VOMPS}")
+axislegend(ax2, position=:rt, merge=true)
+save("square_ising/data/fig-badly_gauged-VOMPS-sx.pdf", fig)
 @show fig
 
+# detailed histories
+fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 700))
+ax1 = Axis(fig[1:3, 1], xlabel=L"\text{steps}", ylabel=L"\text{error in }f", yscale=log10)
+for (index, τ) in zip(index_arr, τs) 
+    @load "square_ising/data/badly_gauged-VOMPS-histories_$(index).jld2" VOMPS_results
+    fs = VOMPS_results[3]
+    lines!(ax1, 1:1500, abs.(fs .- f_exact) ./ f_exact, label=latexstring("\$τ=$(τ)\$"))
+end
+
+ax2 = Axis(fig[4:6, 1], xlabel=L"χ", ylabel=L"\text{error in }f", yscale=log10)
+χs = 2 .^ (1:6)
+for (index, τ) in zip(index_arr, τs) 
+    @load "square_ising/data/badly_gauged-VOMPS-histories_$(index).jld2" VOMPS_results
+    f_res = VOMPS_results[3][250:250:end]
+    lines!(ax2, χs, abs.(f_res .- f_exact) ./ f_exact, label=latexstring("\$τ=$(τ)\$"))
+    scatter!(ax2, χs, abs.(f_res .- f_exact) ./ f_exact, label=latexstring("\$τ=$(τ)\$"))
+end
+Legend(fig[end+1, 1], ax1, nbanks=5)
 save("square_ising/data/badly_gauged-VOMPS-histories.pdf", fig)
-
-VOMPS_results_01 = VOMPS_history(0.1, σz);
-@save "square_ising/data/badly_gauged-VOMPS-histories_z_01.jld2" VOMPS_results=VOMPS_results_01 
-f01s = VOMPS_results_01[3];
-
-VOMPS_results_05 = VOMPS_history(0.5, σz);
-@save "square_ising/data/badly_gauged-VOMPS-histories_z_05.jld2" VOMPS_results=VOMPS_results_05 
-f05s = VOMPS_results_05[3];
-
-VOMPS_results_10 = VOMPS_history(1.0, σz);
-@save "square_ising/data/badly_gauged-VOMPS-histories_z_10.jld2" VOMPS_results=VOMPS_results_10 
-f10s = VOMPS_results_10[3];
-
-VOMPS_results_15 = VOMPS_history(1.5, σz);
-@save "square_ising/data/badly_gauged-VOMPS-histories_z_15.jld2" VOMPS_results=VOMPS_results_15 
-f15s = VOMPS_results_15[3];
-
-VOMPS_results_20 = VOMPS_history(2.0, σz);
-@save "square_ising/data/badly_gauged-VOMPS-histories_z_20.jld2" VOMPS_results=VOMPS_results_20 
-f20s = VOMPS_results_20[3];
-
-fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 600))
-ax1 = Axis(fig[1, 1], xlabel=L"\text{steps}", ylabel=L"\text{error in }f", yscale=log10)
-lines!(ax1, 1:1500, abs.(f01s .- f_exact) ./ f_exact, label=L"τ=0.1")
-lines!(ax1, 1:1500, abs.(f05s .- f_exact) ./ f_exact, label=L"τ=0.5")
-lines!(ax1, 1:1500, abs.(f10s .- f_exact) ./ f_exact, label=L"τ=1.0")
-lines!(ax1, 1:1500, abs.(f15s .- f_exact) ./ f_exact, label=L"τ=1.5")
-lines!(ax1, 1:1500, abs.(f20s .- f_exact) ./ f_exact, label=L"τ=2.0")
-axislegend(ax1)
-@show fig 
-
-get_results(res) = res[3][250:250:end]
-χs = 2 .^ (1:6)
-f_res01s = get_results(VOMPS_results_01)
-f_res05s = get_results(VOMPS_results_05)
-f_res10s = get_results(VOMPS_results_10)
-f_res15s = get_results(VOMPS_results_15)
-f_res20s = get_results(VOMPS_results_20)
-
-ax2 = Axis(fig[2, 1], xlabel=L"χ", ylabel=L"\text{error in }f", yscale=log10)
-lines!(ax2, χs, abs.(f_res01s .- f_exact) ./ f_exact, label=L"τ=0.1")
-lines!(ax2, χs, abs.(f_res05s .- f_exact) ./ f_exact, label=L"τ=0.5")
-lines!(ax2, χs, abs.(f_res10s .- f_exact) ./ f_exact, label=L"τ=1.0")
-lines!(ax2, χs, abs.(f_res15s .- f_exact) ./ f_exact, label=L"τ=1.5")
-lines!(ax2, χs, abs.(f_res20s .- f_exact) ./ f_exact, label=L"τ=2.0")
-axislegend(ax2)
 @show fig
 
+# sigma z results
+indices = ["000", "025", "050", "075", "100", "125", "150", "175"];
+τs = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75]
+χs = [2, 4, 8, 16, 32, 64]
+
+for (index, τ) in zip(indices[1:end], τs[1:end]) 
+    VOMPS_results = VOMPS_history(τ, σz);
+    @save "square_ising/data/badly_gauged-VOMPS-histories_z_$(index).jld2" VOMPS_results 
+end
+
+VOMPS_results_vec = map(indices) do index
+    @load "square_ising/data/badly_gauged-VOMPS-histories_z_$(index).jld2" VOMPS_results
+    return VOMPS_results
+end; 
+
+ferrs = map(zip(VOMPS_results_vec, τs)) do item 
+    VOMPS_results, τ = item 
+    
+    ψ = VOMPS_results[1][end]
+    ℙ = genP(τ, σz)[2]
+    ℙinv = genP(-τ, σz)[2]
+
+    ψ1 = ℙinv * ψ
+    f = real(log(dot(ψ1, 𝕋0, ψ1) / dot(ψ1, ψ1)))
+    return abs.(f .- f_exact) / f_exact
+end
+vars = map(VOMPS_results_vec) do VOMPS_results 
+    VOMPS_results[4][end]
+end
+iTEBD_results_vec = map(indices) do index
+    @load "square_ising/data/badly_gauged-ITEBD-histories_z_$(index).jld2" iTEBD_results
+    return iTEBD_results
+end
+ferrs_iTEBD = map(zip(iTEBD_results_vec, τs)) do item 
+    iTEBD_results, τ = item 
+    
+    ψ = iTEBD_results[1][end]
+    ℙ = genP(τ, σz)[2]
+    ℙinv = genP(-τ, σz)[2]
+
+    ψ1 = ℙinv * ψ
+    f = real(log(dot(ψ1, 𝕋0, ψ1) / dot(ψ1, ψ1)))
+    return abs.(f .- f_exact) / f_exact
+end
+vars_iTEBD = map(iTEBD_results_vec) do iTEBD_results 
+    iTEBD_results[4][end]
+end
+
+fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 300))
+ax1 = Axis(fig[1, 1], xlabel=L"\tau", ylabel=L"\text{error in }f", yscale=log10)
+scatter!(ax1, τs, ferrs_iTEBD, marker=:circle, markersize=10, label=L"\text{iTEBD}")
+lines!(ax1, τs, ferrs_iTEBD, linestyle=:dash, label=L"\text{iTEBD}")
+scatter!(ax1, τs, ferrs, marker=:circle, markersize=10, label=L"\text{VOMPS}")
+lines!(ax1, τs, ferrs, linestyle=:dash, label=L"\text{VOMPS}")
+axislegend(ax1, position=:lt, merge=true)
+ax2 = Axis(fig[1, 2], xlabel=L"\tau", ylabel=L"\text{variance}", yscale=log10)
+scatter!(τs, norm.(vars_iTEBD), marker=:circle, markersize=10, label=L"\text{iTEBD}")
+lines!(τs, norm.(vars_iTEBD), linestyle=:dash, label=L"\text{iTEBD}")
+scatter!(τs, norm.(vars), marker=:circle, markersize=10, label=L"\text{VOMPS}")
+lines!(τs, norm.(vars), linestyle=:dash, label=L"\text{VOMPS}")
+axislegend(ax2, position=:rt, merge=true)
+save("square_ising/data/fig-badly_gauged-VOMPS-sz.pdf", fig)
+@show fig
+
+# detailed histories
+fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 700))
+ax1 = Axis(fig[1:3, 1], xlabel=L"\text{steps}", ylabel=L"\text{error in }f", yscale=log10)
+for (index, τ) in zip(indices, τs) 
+    @load "square_ising/data/badly_gauged-VOMPS-histories_$(index).jld2" VOMPS_results
+    fs = VOMPS_results[3]
+    lines!(ax1, 1:1500, abs.(fs .- f_exact) ./ f_exact, label=latexstring("\$τ=$(τ)\$"))
+end
+
+ax2 = Axis(fig[4:6, 1], xlabel=L"χ", ylabel=L"\text{error in }f", yscale=log10)
+χs = 2 .^ (1:6)
+for (index, τ) in zip(indices, τs) 
+    @load "square_ising/data/badly_gauged-VOMPS-histories_$(index).jld2" VOMPS_results
+    f_res = VOMPS_results[3][250:250:end]
+    lines!(ax2, χs, abs.(f_res .- f_exact) ./ f_exact, label=latexstring("\$τ=$(τ)\$"))
+    scatter!(ax2, χs, abs.(f_res .- f_exact) ./ f_exact, label=latexstring("\$τ=$(τ)\$"))
+end
+Legend(fig[end+1, 1], ax1, nbanks=5)
 save("square_ising/data/badly_gauged-VOMPS-histories_z.pdf", fig)
+@show fig
 

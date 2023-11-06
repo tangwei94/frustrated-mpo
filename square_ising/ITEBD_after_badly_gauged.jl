@@ -77,6 +77,10 @@ function iTEBD_history(τ::Real, O::AbstractTensorMap, err::Real)
     return ψRs, ψLs, fs, vars
 end
 
+iTEBD_results_000 = iTEBD_history(0.0, σx, 1e-8);
+@save "square_ising/data/badly_gauged-ITEBD-histories_000.jld2" iTEBD_results=iTEBD_results_000 
+@save "square_ising/data/badly_gauged-ITEBD-histories_z_000.jld2" iTEBD_results=iTEBD_results_000 
+
 iTEBD_results_025 = iTEBD_history(0.25, σx, 1e-8);
 @save "square_ising/data/badly_gauged-ITEBD-histories_025.jld2" iTEBD_results=iTEBD_results_025 
 
@@ -101,8 +105,8 @@ iTEBD_results_175 = iTEBD_history(1.75, σx, 1e-8);
 iTEBD_results_200 = iTEBD_history(2.0, σx, 1e-8);
 @save "square_ising/data/badly_gauged-ITEBD-histories_200.jld2" iTEBD_results=iTEBD_results_200 
 
-indices = ["025", "050", "075", "100", "125", "150", "175", "200"];
-τs = 0.25:0.25:2.00;
+indices = ["000", "025", "050", "075", "100", "125", "150", "175", "200"];
+τs = 0.0:0.25:2.00;
 iTEBD_results_vec = map(indices) do index
     @load "square_ising/data/badly_gauged-ITEBD-histories_$(index).jld2" iTEBD_results
     return iTEBD_results
@@ -158,7 +162,7 @@ Legend(fig[7, 1], ax1, nbanks=4)
 save("square_ising/data/badly_gauged-iTEBD-histories.pdf", fig)
 
 ####### gauge by z
-for (τ, index) in zip(τs, indices)
+for (τ, index) in zip(τs[1:end], indices[1:end])
     iTEBD_results = iTEBD_history(τ, σz, 1e-8);
     @save "square_ising/data/badly_gauged-ITEBD-histories_z_$(index).jld2" iTEBD_results
 end
