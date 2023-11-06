@@ -91,12 +91,12 @@ for (index, τ) in zip(indices[1:end], τs[1:end])
     @save "square_ising/data/badly_gauged-VOMPS-histories_$(index).jld2" VOMPS_results 
 end
 
-VOMPS_results_vec = map(indices) do index
+VOMPS_results_vec_x = map(indices) do index
     @load "square_ising/data/badly_gauged-VOMPS-histories_$(index).jld2" VOMPS_results
     return VOMPS_results
 end; 
 
-ferrs = map(zip(VOMPS_results_vec, τs)) do item 
+ferrs_x = map(zip(VOMPS_results_vec_x, τs)) do item 
     VOMPS_results, τ = item 
     
     ψ = VOMPS_results[1][end]
@@ -107,14 +107,14 @@ ferrs = map(zip(VOMPS_results_vec, τs)) do item
     f = real(log(dot(ψ1, 𝕋0, ψ1) / dot(ψ1, ψ1)))
     return abs.(f .- f_exact) / f_exact
 end
-vars = map(VOMPS_results_vec) do VOMPS_results 
+vars_x = map(VOMPS_results_vec_x) do VOMPS_results 
     VOMPS_results[4][end]
 end
-iTEBD_results_vec = map(indices) do index
+iTEBD_results_vec_x = map(indices) do index
     @load "square_ising/data/badly_gauged-ITEBD-histories_$(index).jld2" iTEBD_results
     return iTEBD_results
 end
-ferrs_iTEBD = map(zip(iTEBD_results_vec, τs)) do item 
+ferrs_iTEBD_x = map(zip(iTEBD_results_vec_x, τs)) do item 
     iTEBD_results, τ = item 
     
     ψ = iTEBD_results[1][end]
@@ -125,30 +125,30 @@ ferrs_iTEBD = map(zip(iTEBD_results_vec, τs)) do item
     f = real(log(dot(ψ1, 𝕋0, ψ1) / dot(ψ1, ψ1)))
     return abs.(f .- f_exact) / f_exact
 end
-vars_iTEBD = map(iTEBD_results_vec) do iTEBD_results 
+vars_iTEBD_x = map(iTEBD_results_vec_x) do iTEBD_results 
     iTEBD_results[4][end]
 end
 
 fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 300))
 ax1 = Axis(fig[1, 1], xlabel=L"\tau", ylabel=L"\text{error in }f", yscale=log10)
-scatter!(ax1, τs, ferrs_iTEBD, marker=:circle, markersize=10, label=L"\text{iTEBD}")
-lines!(ax1, τs, ferrs_iTEBD, linestyle=:dash, label=L"\text{iTEBD}")
-scatter!(ax1, τs, ferrs, marker=:circle, markersize=10, label=L"\text{VOMPS}")
-lines!(ax1, τs, ferrs, linestyle=:dash, label=L"\text{VOMPS}")
+scatter!(ax1, τs, ferrs_iTEBD_x, marker=:circle, markersize=10, label=L"\text{iTEBD}")
+lines!(ax1, τs, ferrs_iTEBD_x, linestyle=:dash, label=L"\text{iTEBD}")
+scatter!(ax1, τs, ferrs_x, marker=:circle, markersize=10, label=L"\text{VOMPS}")
+lines!(ax1, τs, ferrs_x, linestyle=:dash, label=L"\text{VOMPS}")
 axislegend(ax1, position=:lt, merge=true)
 ax2 = Axis(fig[1, 2], xlabel=L"\tau", ylabel=L"\text{variance}", yscale=log10)
-scatter!(τs, norm.(vars_iTEBD), marker=:circle, markersize=10, label=L"\text{iTEBD}")
-lines!(τs, norm.(vars_iTEBD), linestyle=:dash, label=L"\text{iTEBD}")
-scatter!(τs, norm.(vars), marker=:circle, markersize=10, label=L"\text{VOMPS}")
-lines!(τs, norm.(vars), linestyle=:dash, label=L"\text{VOMPS}")
+scatter!(τs, norm.(vars_iTEBD_x), marker=:circle, markersize=10, label=L"\text{iTEBD}")
+lines!(τs, norm.(vars_iTEBD_x), linestyle=:dash, label=L"\text{iTEBD}")
+scatter!(τs, norm.(vars_x), marker=:circle, markersize=10, label=L"\text{VOMPS}")
+lines!(τs, norm.(vars_x), linestyle=:dash, label=L"\text{VOMPS}")
 axislegend(ax2, position=:rt, merge=true)
-save("square_ising/data/fig-badly_gauged-VOMPS-sx.pdf", fig)
+save("square_ising/data/tmpfig-badly_gauged-VOMPS-sx.pdf", fig)
 @show fig
 
 # detailed histories
 fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 700))
 ax1 = Axis(fig[1:3, 1], xlabel=L"\text{steps}", ylabel=L"\text{error in }f", yscale=log10)
-for (index, τ) in zip(index_arr, τs) 
+for (index, τ) in zip(indices, τs) 
     @load "square_ising/data/badly_gauged-VOMPS-histories_$(index).jld2" VOMPS_results
     fs = VOMPS_results[3]
     lines!(ax1, 1:1500, abs.(fs .- f_exact) ./ f_exact, label=latexstring("\$τ=$(τ)\$"))
@@ -176,12 +176,12 @@ for (index, τ) in zip(indices[1:end], τs[1:end])
     @save "square_ising/data/badly_gauged-VOMPS-histories_z_$(index).jld2" VOMPS_results 
 end
 
-VOMPS_results_vec = map(indices) do index
+VOMPS_results_vec_z = map(indices) do index
     @load "square_ising/data/badly_gauged-VOMPS-histories_z_$(index).jld2" VOMPS_results
     return VOMPS_results
 end; 
 
-ferrs = map(zip(VOMPS_results_vec, τs)) do item 
+ferrs_z = map(zip(VOMPS_results_vec_z, τs)) do item 
     VOMPS_results, τ = item 
     
     ψ = VOMPS_results[1][end]
@@ -192,14 +192,14 @@ ferrs = map(zip(VOMPS_results_vec, τs)) do item
     f = real(log(dot(ψ1, 𝕋0, ψ1) / dot(ψ1, ψ1)))
     return abs.(f .- f_exact) / f_exact
 end
-vars = map(VOMPS_results_vec) do VOMPS_results 
+vars_z = map(VOMPS_results_vec_z) do VOMPS_results 
     VOMPS_results[4][end]
 end
-iTEBD_results_vec = map(indices) do index
+iTEBD_results_vec_z = map(indices) do index
     @load "square_ising/data/badly_gauged-ITEBD-histories_z_$(index).jld2" iTEBD_results
     return iTEBD_results
 end
-ferrs_iTEBD = map(zip(iTEBD_results_vec, τs)) do item 
+ferrs_iTEBD_z = map(zip(iTEBD_results_vec_z, τs)) do item 
     iTEBD_results, τ = item 
     
     ψ = iTEBD_results[1][end]
@@ -210,24 +210,24 @@ ferrs_iTEBD = map(zip(iTEBD_results_vec, τs)) do item
     f = real(log(dot(ψ1, 𝕋0, ψ1) / dot(ψ1, ψ1)))
     return abs.(f .- f_exact) / f_exact
 end
-vars_iTEBD = map(iTEBD_results_vec) do iTEBD_results 
+vars_iTEBD_z = map(iTEBD_results_vec_z) do iTEBD_results 
     iTEBD_results[4][end]
 end
 
 fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 300))
 ax1 = Axis(fig[1, 1], xlabel=L"\tau", ylabel=L"\text{error in }f", yscale=log10)
-scatter!(ax1, τs, ferrs_iTEBD, marker=:circle, markersize=10, label=L"\text{iTEBD}")
-lines!(ax1, τs, ferrs_iTEBD, linestyle=:dash, label=L"\text{iTEBD}")
-scatter!(ax1, τs, ferrs, marker=:circle, markersize=10, label=L"\text{VOMPS}")
-lines!(ax1, τs, ferrs, linestyle=:dash, label=L"\text{VOMPS}")
+scatter!(ax1, τs, ferrs_iTEBD_z, marker=:circle, markersize=10, label=L"\text{iTEBD}")
+lines!(ax1, τs, ferrs_iTEBD_z, linestyle=:dash, label=L"\text{iTEBD}")
+scatter!(ax1, τs, ferrs_z, marker=:circle, markersize=10, label=L"\text{VOMPS}")
+lines!(ax1, τs, ferrs_z, linestyle=:dash, label=L"\text{VOMPS}")
 axislegend(ax1, position=:lt, merge=true)
 ax2 = Axis(fig[1, 2], xlabel=L"\tau", ylabel=L"\text{variance}", yscale=log10)
-scatter!(τs, norm.(vars_iTEBD), marker=:circle, markersize=10, label=L"\text{iTEBD}")
-lines!(τs, norm.(vars_iTEBD), linestyle=:dash, label=L"\text{iTEBD}")
-scatter!(τs, norm.(vars), marker=:circle, markersize=10, label=L"\text{VOMPS}")
-lines!(τs, norm.(vars), linestyle=:dash, label=L"\text{VOMPS}")
+scatter!(τs, norm.(vars_iTEBD_z), marker=:circle, markersize=10, label=L"\text{iTEBD}")
+lines!(τs, norm.(vars_iTEBD_z), linestyle=:dash, label=L"\text{iTEBD}")
+scatter!(τs, norm.(vars_z), marker=:circle, markersize=10, label=L"\text{VOMPS}")
+lines!(τs, norm.(vars_z), linestyle=:dash, label=L"\text{VOMPS}")
 axislegend(ax2, position=:rt, merge=true)
-save("square_ising/data/fig-badly_gauged-VOMPS-sz.pdf", fig)
+save("square_ising/data/tmpfig-badly_gauged-VOMPS-sz.pdf", fig)
 @show fig
 
 # detailed histories
@@ -251,3 +251,35 @@ Legend(fig[end+1, 1], ax1, nbanks=5)
 save("square_ising/data/badly_gauged-VOMPS-histories_z.pdf", fig)
 @show fig
 
+
+# combine two figures together
+fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 400))
+gf = fig[1:4, 1:6] = GridLayout()
+gl = fig[end+1, 2:4] = GridLayout()
+ax1 = Axis(gf[1, 1], xlabel=L"\tau", ylabel=L"\text{error in }f", yscale=log10)
+
+scatterlines!(ax1, τs, ferrs_iTEBD_x, marker=
+:xcross, linestyle=:dash, markersize=12, color=:darkorange, label=L"\text{iTEBD, } Q = \sigma^x")
+scatterlines!(ax1, τs, ferrs_x, marker=:circle, linestyle=:dot, color=:darkorange, markersize=10, label=L"\text{VOMPS, } Q = \sigma^x")
+
+scatterlines!(ax1, τs, ferrs_iTEBD_z, marker=:xcross, linestyle=:dash, markersize=12, color=:royalblue, label=L"\text{iTEBD, } Q = \sigma^z")
+scatterlines!(ax1, τs, ferrs_z, marker=:circle, linestyle=:dot, markersize=10, color=:royalblue, label=L"\text{VOMPS, } Q = \sigma^z")
+
+text!(ax1, 0, 10^(-3.5); text = L"\text{(a)}", align=(:left, :center))
+#axislegend(ax1, position=:lt, merge=true)
+
+ax2 = Axis(gf[1, 2], xlabel=L"\tau", ylabel=L"\text{variance}", yscale=log10)
+
+scatterlines!(τs, norm.(vars_iTEBD_x), marker=:xcross, linestyle=:dash, markersize=12, color=:darkorange, label=L"\text{iTEBD, } Q = \sigma^x")
+scatterlines!(τs, norm.(vars_x), marker=:circle, linestyle=:dot, markersize=10, color=:darkorange, label=L"\text{VOMPS, } Q = \sigma^x")
+
+scatterlines!(τs, norm.(vars_iTEBD_z), marker=:xcross, linestyle=:dash, markersize=12, color=:royalblue, label=L"\text{iTEBD, } Q = \sigma^z")
+scatterlines!(τs, norm.(vars_z), marker=:circle, linestyle=:dot, markersize=10, color=:royalblue, label=L"\text{VOMPS, } Q = \sigma^z")
+
+text!(ax2, 0, 10^(-9); text = L"\text{(b)}", align=(:left, :center))
+#axislegend(ax2, position=:rt, merge=true)
+
+Legend(gl[1, 1], ax1, nbanks=2)
+
+save("square_ising/data/fig-badly_gauged-VOMPS.pdf", fig)
+@show fig
