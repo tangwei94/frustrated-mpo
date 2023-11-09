@@ -24,8 +24,8 @@ end
 𝕋0 = mpo_gen(1, T, :inf)
 
 function f_normality(τ::Real, O::AbstractTensorMap)
-    ℙ = genP(τ, O)[2]
-    ℙinv = genP(-τ, O)[2]
+    ℙ = generate_P(τ, O)[2]
+    ℙinv = generate_P(-τ, O)[2]
 
     𝕋1 = ℙ * 𝕋0 * ℙinv
     𝕋1dag = ℙinv * 𝕋0 * ℙ 
@@ -60,37 +60,41 @@ end;
 
 τ2s = 0:0.05:2
 for (index, τ, ψR) in zip(indices, τs, ψRs_x)
-    vars = map(τs) do τ2
+    vars = map(τ2s) do τ2
         @show τ, τ2
         variance_at_τ(ψR, τ, τ2)
     end;
     @save "square_ising/data/VOMPS_variances_x_$(index).jld2" ψR τ τ2s vars
 end
 for (index, τ, ψR) in zip(indices, τs, ψRs_z)
-    vars = map(τs) do τ2
+    vars = map(τ2s) do τ2
         @show τ, τ2
         variance_at_τ(ψR, τ, τ2, σz)
     end;
     @save "square_ising/data/VOMPS_variances_z_$(index).jld2" ψR τ τ2s vars
 end
 
-fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 300))
-ax1 = Axis(fig[1, 1], xlabel=L"τ", ylabel=L"\text{variance}", yscale=log10)
-for (index, τ) in zip(indices[1:2:end], τs[1:2:end])
+fig = Figure(backgroundcolor = :white, fontsize=18, resolution= (600, 350))
+gf = fig[1:5, 1:6] = GridLayout() 
+gl = fig[end+1, 2:5] = GridLayout()
+ax1 = Axis(gf[1, 1], xlabel=L"τ", ylabel=L"\text{variance}", yscale=log10)
+for (index, τ) in zip(indices[1:4], τs[1:4])
     @load "square_ising/data/VOMPS_variances_x_$(index).jld2" ψR τ τ2s vars
-    scatterlines!(ax1, τs, abs.(vars), linestyle=:dash, label="$(τ)")
+    lines!(ax1, τ2s, abs.(vars) .+ 1e-16, label=latexstring("τ_1 = $(τ)"))
 end
-axislegend(ax1)
-ax2 = Axis(fig[1, 2], xlabel=L"τ", ylabel=L"\text{variance}", yscale=log10)
-for (index, τ) in zip(indices[1:2:end], τs[1:2:end])
+ax2 = Axis(gf[1, 2], xlabel=L"τ", ylabel=L"\text{variance}", yscale=log10)
+for (index, τ) in zip(indices[1:4], τs[1:4])
     @load "square_ising/data/VOMPS_variances_z_$(index).jld2" ψR τ τ2s vars
-    scatterlines!(ax2, τs, abs.(vars), linestyle=:dash, label="$(τ)")
+    lines!(ax2, τ2s, abs.(vars) .+ 1e-16, label=latexstring("τ_1 = $(τ)"))
 end
-axislegend(ax2)
+Legend(gl[1,1], ax1, nbanks=4, merge=true)
+text!(ax1, 0.1, 10^(-10.15); text=L"\text{(a) } Q=σ^x", align=(:left, :center))
+text!(ax2, 0.05, 10^(-4.5); text=L"\text{(b) } Q=σ^z", align=(:left, :center))
+save("square_ising/data/fig-variances-change.pdf", fig)
 @show fig 
 
 indices = ["000", "025", "050", "075", "100", "125", "150", "175"];
-τs = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75]
+τs = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75];
 ψRs_x = map(indices) do index
     @load "square_ising/data/badly_gauged-VOMPS-histories_$(index).jld2" VOMPS_results
     return VOMPS_results[1][end]
